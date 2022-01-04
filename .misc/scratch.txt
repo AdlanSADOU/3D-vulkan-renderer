@@ -1,0 +1,35 @@
+https://www.khronos.org/registry/OpenGL/extensions/KHR/KHR_debug.txt
+
+so I want to draw a triangle
+and be able to move it
+
+VAO
+VBO
+IBO
+model matrix
+
+I need a vertex array that i'm gonna transfer
+into a vertex buffer
+
+ultimately, it has to go through the pipeline,
+through the vertex assembly state, vertex shader, rasterizer
+then fragment shader and eventually end up in a framebuffer
+that will be presented to the screen.
+
+to do that, I have to specify to those stages what my vertex data
+is going to look like;
+
+
+## Maths
+The dot product between two (three-component) vectors returns a
+scalar (just one value) that is the cosine of the angle between the two vectors scaled by
+the product of their lengths.
+
+dot(A, B) = cos(ANGLE_BETWEEN_A_B)
+ANGLE_BETWEEN_A_B = acos(DOT(A,B))
+
+http://asliceofrendering.com/scene%20helper/2020/01/05/InfiniteGrid/
+https://gist.github.com/ChrisDill/291c938605c200d079a88d0a7855f31a
+compile as a seperate dll
+
+
