@@ -3,7 +3,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include <SDL2/SDL.h>
 #include <adgl.h>
 
 #define STB_IMAGE_IMPLEMENTATION
@@ -39,7 +38,6 @@ glm::vec2 quad_pos = {};
 Quad      quad2;
 glm::mat4 quad_transform2;
 glm::vec2 quad_pos2;
-
 
 
 void GLInit()
