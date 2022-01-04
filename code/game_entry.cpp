@@ -12,6 +12,10 @@ extern uint32_t WND_WIDTH;
 extern uint32_t WND_HEIGHT;
 extern Controls controls;
 
+/* Important note
+* these are globals right now but they won't stay that way
+* only until I figure out where they really belong and how they interact
+*/
 Shader        vert_shader;
 Shader        frag_shader;
 ShaderProgram default_shader_program;
