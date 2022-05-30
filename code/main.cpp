@@ -19,21 +19,14 @@ uint32_t WND_HEIGHT = 680;
 
 bool g_running = true;
 
-Controls controls = {};
+Input input = {};
 
 const uint64_t MAX_DT_SAMPLES = 1;
 
 double dt_samples[MAX_DT_SAMPLES] = {};
 double dt_averaged                = 0;
 
-// #ifdef _WIN32
 
-// #if defined(NO_CONSOLE) && defined(_WIN32)
-// int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LPSTR lpCmdLine, _In_ int nShowCmd)
-// {
-//     return SDL_main(__argc, __argv);
-// }
-// #else
 extern int main(int argc, char **argv)
 {
     if (SDL_Init(SDL_INIT_EVERYTHING)) {
@@ -79,10 +72,12 @@ extern int main(int argc, char **argv)
     SDL_Log("Initialized OpenGL context %d.%d Core Profile", gl_version.Major, gl_version.Minor);
 
     glEnable(GL_BLEND);
+    glEnable(GL_DEPTH_TEST);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
 
-    GLInit();
+    // ExampleSPriteInit();
+    Example3DInit();
 
 
     while (g_running) {
@@ -100,17 +95,21 @@ extern int main(int argc, char **argv)
                 // Key Events
                 case SDL_KEYUP:
                     if (key == SDLK_ESCAPE) g_running = false;
-                    if (key == SDLK_UP || key == SDLK_w) controls.up = false;
-                    if (key == SDLK_DOWN || key == SDLK_s) controls.down = false;
-                    if (key == SDLK_LEFT || key == SDLK_a) controls.left = false;
-                    if (key == SDLK_RIGHT || key == SDLK_d) controls.right = false;
+                    if (key == SDLK_UP || key == SDLK_w) input.up = false;
+                    if (key == SDLK_DOWN || key == SDLK_s) input.down = false;
+                    if (key == SDLK_LEFT || key == SDLK_a) input.left = false;
+                    if (key == SDLK_RIGHT || key == SDLK_d) input.right = false;
+                    if (key == SDLK_q ) input.Q = false;
+                    if (key == SDLK_e ) input.E = false;
                     break;
 
                 case SDL_KEYDOWN:
-                    if (key == SDLK_UP || key == SDLK_w) controls.up = true;
-                    if (key == SDLK_DOWN || key == SDLK_s) controls.down = true;
-                    if (key == SDLK_LEFT || key == SDLK_a) controls.left = true;
-                    if (key == SDLK_RIGHT || key == SDLK_d) controls.right = true;
+                    if (key == SDLK_UP || key == SDLK_w) input.up = true;
+                    if (key == SDLK_DOWN || key == SDLK_s) input.down = true;
+                    if (key == SDLK_LEFT || key == SDLK_a) input.left = true;
+                    if (key == SDLK_RIGHT || key == SDLK_d) input.right = true;
+                    if (key == SDLK_q ) input.Q = true;
+                    if (key == SDLK_e ) input.E = true;
                     break;
                 // END Key Events
 
@@ -137,7 +136,8 @@ extern int main(int argc, char **argv)
             acc = 0;
         }
 
-        GLUpdateAndRender(dt_averaged);
+        // ExampleSpriteUpdateDraw(dt_averaged);
+        Example3DUpdateDraw(dt_averaged, input);
         SDL_GL_SwapWindow(window);
 
         uint64_t end = SDL_GetPerformanceCounter();

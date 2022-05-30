@@ -14,11 +14,13 @@
 
 #include <SDL2/SDL_log.h>
 
+#include "mymath.h"
+
 #define LOG_SHADER_SOURCE 0
 
 struct Shader
 {
-    const char  *m_sourcePath = 0;
+    const char * m_sourcePath = 0;
     unsigned int m_ID         = 0;
     std::string  m_source     = {};
 
@@ -131,10 +133,16 @@ struct ShaderProgram
 
     // todo(ad): instead of making to calls we could do just 1
     // by caching the location upfront, for vertex attributes, they wont change anyway
-    void SetUniformMatrix4fvByName(const char *name, glm::mat4 matrix)
+    void SetUniformMatrix4Name(const char *name, glm::mat4 matrix)
     {
         GLint location = GetUniformLocation(name);
         glUniformMatrix4fv(location, 1, GL_FALSE, glm::value_ptr(matrix));
+    }
+
+    void SetUniformMatrix4Name(const char *name, Matrix4 matrix)
+    {
+        GLint location = GetUniformLocation(name);
+        glUniformMatrix4fv(location, 1, GL_TRUE, matrix.m);
     }
 };
 

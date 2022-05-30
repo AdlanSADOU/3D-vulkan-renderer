@@ -12,6 +12,8 @@
 #include <GL/glu.h>
 #include <SDL2/SDL.h>
 
+#define u32 uint32_t
+
 static void GLAPIENTRY MessageCallback(GLenum source,
     GLenum                                    type,
     GLuint                                    id,
@@ -27,12 +29,14 @@ static void GLAPIENTRY MessageCallback(GLenum source,
 
 #define ARR_COUNT(arr)(sizeof(arr)/sizeof(arr[0]))
 
-struct Controls
+struct Input
 {
     bool up;
     bool down;
     bool left;
     bool right;
+    bool Q;
+    bool E;
 };
 
 struct Vertex2D
@@ -59,7 +63,10 @@ struct Quad
 
 
 
-void GLInit();
-void GLUpdateAndRender(float dt);
+void ExampleSPriteInit();
+void ExampleSpriteUpdateDraw(float dt);
+
+void Example3DInit();
+void Example3DUpdateDraw(float dt, Input input);
 
 #endif // ADGL_H
