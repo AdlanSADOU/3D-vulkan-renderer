@@ -142,7 +142,7 @@ struct ShaderProgram
     void SetUniformMatrix4Name(const char *name, Matrix4 matrix)
     {
         GLint location = GetUniformLocation(name);
-        glUniformMatrix4fv(location, 1, GL_TRUE, matrix.m);
+        glUniformMatrix4fv(location, 1, GL_FALSE, matrix.m);
     }
 };
 

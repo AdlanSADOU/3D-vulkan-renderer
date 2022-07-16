@@ -8,6 +8,6 @@ uniform mat4 projectionGLM;
 
 void main()
 {
-    vec4 point = projectionGLM * vec4(1.,1.,1., 1.);
-    gl_Position = projection * transform * vec4(vPos, 1.);
+    // vec4 point = projectionGLM * vec4(1.0f, 1.0f, 1.0f, 1.0f);
+    gl_Position = projection * transform * vec4(vPos, 1.0f);
 }

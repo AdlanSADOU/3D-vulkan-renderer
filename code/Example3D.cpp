@@ -21,13 +21,24 @@ struct Mesh
     u32 vbo;
     u32 ibo;
 
-    glm::vec3 position;
+    Vector3 position;
+    Matrix4 transform;
 };
 
 Mesh          triangle;
 Shader        vertexShader;
 Shader        fragShader;
 ShaderProgram shaderProg;
+
+//camera
+struct Camera
+{
+    Vector3 position;
+    Vector3 direction;
+    Vector3 up;
+    Vector3 right;
+};
+
 
 void Example3DInit()
 {
@@ -63,65 +74,56 @@ void Example3DInit()
         (void *)0);
     glEnableVertexAttribArray(0);
 
-    Matrix4 projection = Matrix4::Perspective(.01f, 100.f, 45.f, ((float)WND_HEIGHT/(float)WND_WIDTH));
-    glm::mat4 projectionGLM = glm::perspective(45.f, (float)WND_HEIGHT/(float)WND_WIDTH, .01f, 100.f);
+    Matrix4 projection = Matrix4::Perspective(.01f, 100.f, 45.f, ((float)WND_HEIGHT / (float)WND_WIDTH));
     shaderProg.SetUniformMatrix4Name("projection", projection);
-    shaderProg.SetUniformMatrix4Name("projectionGLM", projectionGLM);
 
-    // glm::mat4 transform = glm::translate(glm::mat4(1), glm::vec3(.0f, .2f, .0f));
-    // glm::vec4 position = {1.f,1.f,1.f, 1.f};
-    // SDL_Log("(%f, %f, %f)\n", position.x, position.y, position.z);
+    triangle.transform = {};
+    triangle.position  = { 0.f, 0.f, -3.f };
+
+    triangle.transform = Matrix4::Translate(triangle.position);
+    shaderProg.SetUniformMatrix4Name("transform", triangle.transform);
 
 
-    // Matrix44 transform;
-    // Vector3  position = { 1, 1, 1 };
-    // Vector3  a { 1, 2, 3 };
-    // position = a;
-    // position = position + a;
+    //camera
+    Camera camera;
 
-    // SDL_Log("(%f, %f, %f)\n", position.x, position.y, position.z);
-
-    // // transform.Translate(position);
-    // // shaderProg.SetUniformMatrix4Name("transform", )
-
-    // Vector2 v {800, 600};
-    // SDL_Log("V2 (%f, %f)\n", v.x, v.y);
-    // SDL_Log("V2 (%f, %f)\n", v.u, v.v);
-    // SDL_Log("V2 (%f, %f)\n", v.Width, v.Height);
+    SDL_Log("%f, %f, %f\n", camera.right.x, camera.right.y, camera.right.z);
+    SDL_Log("%f, %f, %f\n", camera.up.x, camera.up.y, camera.up.z);
+    SDL_Log("%f, %f, %f\n", camera.direction.x, camera.direction.y, camera.direction.z);
 }
 
-Vector3 pos { 0, 0, 0 };
-void    Example3DUpdateDraw(float dt, Input input)
+
+void Example3DUpdateDraw(float dt, Input input)
 {
     glClearColor(0.5f, 0.1f, 0.5f, 1.f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     shaderProg.UseProgram();
+
+    Vector3 directionDelta { 0, 0, 0 };
     if (input.right) {
-        pos.x += .001f;
+        directionDelta.x = .001f;
     }
     if (input.left) {
-        pos.x += -.001f;
+        directionDelta.x = -.001f;
     }
     if (input.Q) {
-        pos.y += .001f;
+        directionDelta.y = .001f;
     }
     if (input.E) {
-        pos.y += -.001f;
+        directionDelta.y = -.001f;
     }
     if (input.up) {
-        pos.z += -.001f;
+        directionDelta.z = -.001f;
     }
     if (input.down) {
-        pos.z += .001f;
+        directionDelta.z = .001f;
     }
 
-    // glm::mat4 transform = glm::mat4(1);
-    // transform =  glm::translate(glm::mat4(1), glm::vec3(0,0,0));
+    triangle.position += directionDelta;
 
-    Matrix4 transform = Matrix4::Identity();
-    transform = Matrix4::Translate(pos);
-    shaderProg.SetUniformMatrix4Name("transform", transform);
+    triangle.transform = Matrix4::Translate(triangle.position);
+    shaderProg.SetUniformMatrix4Name("transform", triangle.transform);
 
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, triangle.ibo);
     glDrawElements(GL_TRIANGLES, 3, GL_UNSIGNED_SHORT, (void *)0);
