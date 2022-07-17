@@ -38,6 +38,7 @@ struct Camera
     Vector3 up;
     Vector3 right;
 };
+Camera camera = {};
 
 
 void Example3DInit()
@@ -85,7 +86,9 @@ void Example3DInit()
 
 
     //camera
-    Camera camera;
+
+    // glm::mat4 view = glm::lookAt(glm::vec3(0,0,3), glm::vec3(0,0,0), glm::vec3(0,1,0));
+    // shaderProg.SetUniformMatrix4Name("view", view);
 
     SDL_Log("%f, %f, %f\n", camera.right.x, camera.right.y, camera.right.z);
     SDL_Log("%f, %f, %f\n", camera.up.x, camera.up.y, camera.up.z);
@@ -102,28 +105,38 @@ void Example3DUpdateDraw(float dt, Input input)
 
     Vector3 directionDelta { 0, 0, 0 };
     if (input.right) {
-        directionDelta.x = .001f;
+        directionDelta.x = .01f;
     }
     if (input.left) {
-        directionDelta.x = -.001f;
+        directionDelta.x = -.01f;
     }
     if (input.Q) {
-        directionDelta.y = .001f;
+        directionDelta.y = .01f;
     }
     if (input.E) {
-        directionDelta.y = -.001f;
+        directionDelta.y = -.01f;
     }
     if (input.up) {
-        directionDelta.z = -.001f;
+        directionDelta.z = -.01f;
     }
     if (input.down) {
-        directionDelta.z = .001f;
+        directionDelta.z = .01f;
     }
 
-    triangle.position += directionDelta;
+    // triangle.position += directionDelta;
 
     triangle.transform = Matrix4::Translate(triangle.position);
     shaderProg.SetUniformMatrix4Name("transform", triangle.transform);
+
+    camera.position += directionDelta;
+    static float rotationX = 0;
+    rotationX += input.mouse.xrel*0.01f;
+    glm::mat4 view = glm::lookAt(glm::vec3(camera.position.x, camera.position.y, camera.position.z), glm::vec3(rotationX, 0, 0), glm::vec3(0, 1, 0));
+    shaderProg.SetUniformMatrix4Name("view", view);
+    rotationX = 0;
+
+    // Matrix4 view = LookAt(camera.position, { 0, 0, 0 }, { 0, 1, 0 });
+    // shaderProg.SetUniformMatrix4Name("view", view);
 
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, triangle.ibo);
     glDrawElements(GL_TRIANGLES, 3, GL_UNSIGNED_SHORT, (void *)0);

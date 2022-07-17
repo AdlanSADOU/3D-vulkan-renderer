@@ -110,6 +110,7 @@ inline Vector3 operator*(float a, Vector3 &v)
     return res;
 }
 
+
 struct Matrix4
 {
     float m[16];
@@ -155,31 +156,46 @@ struct Matrix4
             0, 0, w, 0
         };
     }
-
-    static Matrix4 LookAt(Vector3 position, Vector3 target, Vector3 up)
-    {
-        Vector3 p = position;
-        Vector3 d = Vector3::Normalize(position - target);
-        Vector3 r = Vector3::Normalize(Vector3::Cross(up, d));
-        Vector3 u = Vector3::Normalize(Vector3::Cross(r, d));
-
-        // todo: probably needs inversion
-        Matrix4 rot = {
-            r.x, r.y, r.z, 0.0,
-            u.x, u.y, u.z, 0.0,
-            d.x, d.y, d.z, 0.0,
-            0.0, 0.0, 0.0, 0.0
-        };
-
-        Matrix4 tr = {
-            1.0, 0.0, 0.0, -p.x,
-            0.0, 1.0, 0.0, -p.y,
-            0.0, 0.0, 1.0, -p.z,
-            0.0, 0.0, 0.0, 1.0f
-        };
-
-        // todo Matrix * Matrix multiplication
-        // return rot * tr;
-        return {};
-    }
 };
+
+
+inline Matrix4 operator*(const Matrix4 &m1, Matrix4 &m2)
+{
+    Matrix4 res;
+
+    for (size_t i = 0; i <= 12; i += 4) {
+        for (size_t j = 0; j <= 3; j += 1) {
+            res.m[i + j] = m1.m[i] * m2.m[j] + m1.m[i + 1] * m2.m[j + 4] + m1.m[i + 2] * m2.m[j + 8] + m1.m[i + 3] * m2.m[j + 12];
+            size_t counter = i+j;
+            float interm = res.m[counter];
+            interm = res.m[counter];
+        }
+    }
+
+    return res;
+}
+
+inline Matrix4 LookAt(Vector3 position, Vector3 target, Vector3 up)
+{
+    Vector3 p = position;
+    Vector3 d = Vector3::Normalize(position - target);
+    Vector3 r = Vector3::Normalize(Vector3::Cross(up, d));
+    Vector3 u = Vector3::Normalize(Vector3::Cross(r, d));
+
+    // todo: probably needs inversion
+    Matrix4 rot = {
+        r.x, r.y, r.z, 0.0,
+        u.x, -u.y, u.z, 0.0,
+        d.x, d.y, d.z, 0.0,
+        0.0, 0.0, 0.0, 0.0
+    };
+
+    Matrix4 tr = {
+        1.0, 0.0, 0.0, -p.x,
+        0.0, 1.0, 0.0, -p.y,
+        0.0, 0.0, 1.0, -p.z,
+        0.0, 0.0, 0.0, 1.0f
+    };
+
+    return rot*tr;
+}

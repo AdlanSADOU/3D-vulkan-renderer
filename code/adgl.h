@@ -37,6 +37,11 @@ struct Input
     bool right;
     bool Q;
     bool E;
+
+    struct Mouse {
+        int32_t xrel;
+        int32_t yrel;
+    } mouse;
 };
 
 struct Vertex2D

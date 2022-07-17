@@ -48,7 +48,7 @@ extern int main(int argc, char **argv)
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
 
     int           window_flags = SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE;
-    SDL_Window   *window       = SDL_CreateWindow("awesome", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, WND_WIDTH, WND_HEIGHT, window_flags);
+    SDL_Window *  window       = SDL_CreateWindow("awesome", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, WND_WIDTH, WND_HEIGHT, window_flags);
     SDL_GLContext glcontext    = SDL_GL_CreateContext(window);
 
     if (SDL_GL_SetSwapInterval(VSYNC) < 0) {
@@ -88,6 +88,7 @@ extern int main(int argc, char **argv)
         SDL_Event event = {};
         while (SDL_PollEvent(&event)) {
             SDL_Keycode key = event.key.keysym.sym;
+            // SDL_Log("%d\n", key);
             switch (event.type) {
 
                 // https://wiki.libsdl.org/SDL_Event
@@ -99,8 +100,8 @@ extern int main(int argc, char **argv)
                     if (key == SDLK_DOWN || key == SDLK_s) input.down = false;
                     if (key == SDLK_LEFT || key == SDLK_a) input.left = false;
                     if (key == SDLK_RIGHT || key == SDLK_d) input.right = false;
-                    if (key == SDLK_q ) input.Q = false;
-                    if (key == SDLK_e ) input.E = false;
+                    if (key == SDLK_q) input.Q = false;
+                    if (key == SDLK_e) input.E = false;
                     break;
 
                 case SDL_KEYDOWN:
@@ -108,11 +109,16 @@ extern int main(int argc, char **argv)
                     if (key == SDLK_DOWN || key == SDLK_s) input.down = true;
                     if (key == SDLK_LEFT || key == SDLK_a) input.left = true;
                     if (key == SDLK_RIGHT || key == SDLK_d) input.right = true;
-                    if (key == SDLK_q ) input.Q = true;
-                    if (key == SDLK_e ) input.E = true;
+                    if (key == SDLK_q) input.Q = true;
+                    if (key == SDLK_e) input.E = true;
                     break;
-                // END Key Events
+                    // END Key Events
 
+                case SDL_MOUSEMOTION:
+                    SDL_Log("(%f, %f)\n", event.motion.xrel * .1f, event.motion.yrel * .1f);
+                    input.mouse.xrel = event.motion.xrel;
+                    input.mouse.yrel = event.motion.yrel;
+                    break;
                 ///////////////////////////////
                 // WIndow Events
                 case SDL_WINDOWEVENT:
