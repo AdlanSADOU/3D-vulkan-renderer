@@ -131,8 +131,6 @@ struct ShaderProgram
         return glGetUniformLocation(_programId, name);
     }
 
-    // todo(ad): instead of making to calls we could do just 1
-    // by caching the location upfront, for vertex attributes, they wont change anyway
     void SetUniformMatrix4Name(const char *name, glm::mat4 matrix)
     {
         GLint location = GetUniformLocation(name);
@@ -141,6 +139,7 @@ struct ShaderProgram
 
     void SetUniformMatrix4Name(const char *name, Matrix4 matrix)
     {
+        // we could just hardcode locations to avoid querrying for names each frame..
         GLint location = GetUniformLocation(name);
         glUniformMatrix4fv(location, 1, GL_FALSE, matrix.m);
     }

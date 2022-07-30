@@ -52,8 +52,6 @@ void ExampleSPriteInit()
 
 
 
-
-
     //////////////////////////////////////
     /// Texture
     char texture_path[] = "assets/powerup.png";

@@ -6,7 +6,7 @@
 #include <GL/glew.h>
 #include <SDL2/SDL.h>
 
-#define VSYNC 0
+#define VSYNC 1
 
 struct GLVersion
 {
@@ -14,8 +14,8 @@ struct GLVersion
     int Minor;
 } gl_version;
 
-uint32_t WND_WIDTH  = 920;
-uint32_t WND_HEIGHT = 680;
+u32 WND_WIDTH  = 1200;
+u32 WND_HEIGHT = 800;
 
 bool g_running = true;
 
@@ -32,6 +32,7 @@ extern int main(int argc, char **argv)
     if (SDL_Init(SDL_INIT_EVERYTHING)) {
         SDL_Log("Video initialization failed: %s\n", SDL_GetError());
     }
+
 
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 4);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 5);
@@ -77,7 +78,8 @@ extern int main(int argc, char **argv)
 
 
     // ExampleSPriteInit();
-    Example3DInit();
+    // Example3DInit();
+    InitSpaceShooter();
 
 
     while (g_running) {
@@ -114,17 +116,32 @@ extern int main(int argc, char **argv)
                     break;
                     // END Key Events
 
+                case SDL_MOUSEBUTTONDOWN:
+                    if (event.button.button == 1) input.mouse.left = true;
+                    if (event.button.button == 3) input.mouse.right = true;
+                    break;
+
+                case SDL_MOUSEBUTTONUP:
+                    if (event.button.button == 1) input.mouse.left = false;
+                    if (event.button.button == 3) input.mouse.right = false;
+                    break;
+
                 case SDL_MOUSEMOTION:
-                    SDL_Log("(%f, %f)\n", event.motion.xrel * .1f, event.motion.yrel * .1f);
                     input.mouse.xrel = event.motion.xrel;
                     input.mouse.yrel = event.motion.yrel;
                     break;
                 ///////////////////////////////
+
                 // WIndow Events
                 case SDL_WINDOWEVENT:
                     switch (event.window.event) {
                         case SDL_WINDOWEVENT_CLOSE:
                             g_running = false;
+                            break;
+                        case SDL_WINDOWEVENT_RESIZED:
+                            int w, h;
+                            SDL_GL_GetDrawableSize(window, &w, &h);
+                            glViewport(0, 0, w, h);
                             break;
 
                         default:
@@ -132,6 +149,7 @@ extern int main(int argc, char **argv)
                     }
                 // END Window Events
                 default:
+
                     break;
             }
         }
@@ -143,7 +161,9 @@ extern int main(int argc, char **argv)
         }
 
         // ExampleSpriteUpdateDraw(dt_averaged);
-        Example3DUpdateDraw(dt_averaged, input);
+        // Example3DUpdateDraw(dt_averaged, input);
+        UpdateDrawSpaceShooter(dt_averaged, input);
+
         SDL_GL_SwapWindow(window);
 
         uint64_t end = SDL_GetPerformanceCounter();

@@ -13,21 +13,22 @@
 #include <SDL2/SDL.h>
 
 #define u32 uint32_t
+#define u16 uint16_t
 
 static void GLAPIENTRY MessageCallback(GLenum source,
     GLenum                                    type,
     GLuint                                    id,
     GLenum                                    severity,
     GLsizei                                   length,
-    const GLchar                             *message,
-    const void                               *userParam)
+    const GLchar *                            message,
+    const void *                              userParam)
 {
     SDL_LogCritical(SDL_LOG_CATEGORY_RENDER, "GL CALLBACK: %s type = 0x%x, severity = 0x%x, message = %s\n",
         (type == GL_DEBUG_TYPE_ERROR ? "** GL ERROR **" : ""),
         type, severity, message);
 }
 
-#define ARR_COUNT(arr)(sizeof(arr)/sizeof(arr[0]))
+#define ARR_COUNT(arr) (sizeof(arr) / sizeof(arr[0]))
 
 struct Input
 {
@@ -38,9 +39,12 @@ struct Input
     bool Q;
     bool E;
 
-    struct Mouse {
+    struct Mouse
+    {
         int32_t xrel;
         int32_t yrel;
+        bool left;
+        bool right;
     } mouse;
 };
 
@@ -54,15 +58,31 @@ struct Vertex2D
 struct Quad
 {
     static inline Vertex2D vertices[4] = {
-        { { +0.5f, +0.5f,}, { 1.0, 1.0, 1.0, 1.0 }, { 1, 1 } },
-        { { +0.5f, -0.5f,}, { 1.0, 1.0, 1.0, 1.0 }, { 1, 0 } },
-        { { -0.5f, -0.5f,}, { 1.0, 1.0, 1.0, 1.0 }, { 0, 0 } },
-        { { -0.5f, +0.5f,}, { 1.0, 1.0, 1.0, 1.0 }, { 0, 1 } },
+        { {
+              +0.5f,
+              +0.5f,
+          },
+            { 1.0, 1.0, 1.0, 1.0 }, { 1, 1 } },
+        { {
+              +0.5f,
+              -0.5f,
+          },
+            { 1.0, 1.0, 1.0, 1.0 }, { 1, 0 } },
+        { {
+              -0.5f,
+              -0.5f,
+          },
+            { 1.0, 1.0, 1.0, 1.0 }, { 0, 0 } },
+        { {
+              -0.5f,
+              +0.5f,
+          },
+            { 1.0, 1.0, 1.0, 1.0 }, { 0, 1 } },
     };
 
     static inline GLuint indices[6] = {
-        0,1,3,
-        1,2,3
+        0, 1, 3,
+        1, 2, 3
     };
 };
 
@@ -73,5 +93,8 @@ void ExampleSpriteUpdateDraw(float dt);
 
 void Example3DInit();
 void Example3DUpdateDraw(float dt, Input input);
+
+void InitSpaceShooter();
+void UpdateDrawSpaceShooter(float dt, Input input);
 
 #endif // ADGL_H
