@@ -1,16 +1,45 @@
+/*TODO
+    Player sprite & movement
+
+*/
 #include "shader.h"
 
 #include <stdio.h>
 #include <stdlib.h>
 
 #include <adgl.h>
+#include <Texture.h>
 
-#define STB_IMAGE_IMPLEMENTATION
-#include "stb_image.h"
+#define MATH_3D_IMPLEMENTATION
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/type_ptr.hpp>
+
+struct Vertex2D
+{
+    Vector2   vPos;
+    glm::vec4 vColor;
+    Vector2   vTexCoord;
+};
+
+struct Quad
+{
+    static inline Vertex2D vertices[4] = {
+        { { +0.5f, +0.5f }, { 1.0, 1.0, 1.0, 1.0 }, { 1, 1 } },
+        { { +0.5f, -0.5f }, { 1.0, 1.0, 1.0, 1.0 }, { 1, 0 } },
+        { { -0.5f, -0.5f }, { 1.0, 1.0, 1.0, 1.0 }, { 0, 0 } },
+        { { -0.5f, +0.5f }, { 1.0, 1.0, 1.0, 1.0 }, { 0, 1 } },
+    };
+
+    static inline GLuint indices[6] = {
+        0, 1, 3,
+        1, 2, 3
+    };
+};
 
 extern uint32_t WND_WIDTH;
 extern uint32_t WND_HEIGHT;
-extern Input input;
+extern Input    input;
 
 /* Important note
 * these are globals right now but they won't stay that way
@@ -23,21 +52,21 @@ ShaderProgram default_shader_program;
 glm::mat4 view;
 glm::mat4 projection;
 
-glm::vec3 camera_position;
+Vector3 camera_position;
 
 GLuint vao_quad;
 GLuint vbo_quad;
 GLuint ibo_quad;
-GLuint texture;
-int    tex_width, tex_height, nrChannels;
 
-Quad      quad;
-glm::mat4 quad_transform;
-glm::vec2 quad_pos = {};
+Quad    quad;
+Matrix4 quad_transform;
+Vector2 quad_pos = {};
+
+
+static Texture texture;
 
 void ExampleSPriteInit()
 {
-    stbi_set_flip_vertically_on_load(true);
 
     vert_shader.CreateAndCompile("./shaders/vertexShader.vert", GL_VERTEX_SHADER);
     frag_shader.CreateAndCompile("./shaders/fragmentShader.frag", GL_FRAGMENT_SHADER);
@@ -54,27 +83,8 @@ void ExampleSPriteInit()
 
     //////////////////////////////////////
     /// Texture
-    char texture_path[] = "assets/powerup.png";
 
-    unsigned char *pixels = stbi_load(texture_path, &tex_width, &tex_height, &nrChannels, 0);
-    if (!pixels) {
-        SDL_LogCritical(0, "Failed to load texture: %s", texture_path);
-    }
-
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-
-    glGenTextures(1, &texture);
-    glBindTexture(GL_TEXTURE_2D, texture);
-    if (nrChannels == 4)
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, tex_width, tex_height, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
-    else if (nrChannels == 3)
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, tex_width, tex_height, 0, GL_RGB, GL_UNSIGNED_BYTE, pixels);
-    glGenerateMipmap(GL_TEXTURE_2D);
-    stbi_image_free(pixels);
-
+    texture.Load("assets/powerup.png");
 
 
 
@@ -111,68 +121,52 @@ void ExampleSPriteInit()
 
     /////////////////////////
     /// Vertex2D Attributes
-    quad_pos       = glm::vec2({ 100.f, 400.f });
-    quad_transform = glm::mat4(1.0f);
-    quad_transform = glm::translate(quad_transform, { quad_pos, 0.f });
+    quad_pos       = Vector2({ WND_WIDTH / 2.f, WND_HEIGHT / 2.f });
+    quad_transform = Identity();
+    quad_transform = Translate({ quad_pos.x, quad_pos.y, 0.f });
 
-    quad_transform = glm::translate(quad_transform, { 0.5f * tex_width, 0.5f * tex_height, 0.f });
-    quad_transform = glm::rotate(quad_transform, glm::degrees(0.f), { 0.f, 0.f, 1.f });
-    quad_transform = glm::translate(quad_transform, { -0.5f * tex_width, -0.5f * tex_height, 0.f });
-    quad_transform = glm::scale(quad_transform, { tex_width, tex_height, 1.0f });
+    view = glm::mat4(1.f);
+    // view = glm::translate(view, camera_position);
 
-    camera_position = { 0.f, 0.f, 0.f };
-
-    view = glm::mat4(1.0f);
-    view = glm::translate(view, camera_position);
-
-    // projection = glm::mat4(1.0f);
+    // projection = Matrix4(1.0f);
     // projection = glm::perspective(45.f, (float)(WND_WIDTH / WND_HEIGHT), .1f, 100.f);
 
-    projection  = glm::ortho(0.f, (float)WND_WIDTH, 0.f, (float)WND_HEIGHT, .1f, 10.f);
-    glm::mat4 v = glm::lookAt(glm::vec3(0.f, 0.f, 2.0f), glm::vec3(0.f, 0.f, 0.f), glm::vec3(0.0f, 1.0f, 0.0f));
-
-    projection = projection * v;
-
-    default_shader_program.SetUniformMatrix4Name("model", quad_transform);
-    default_shader_program.SetUniformMatrix4Name("view", view);
-    default_shader_program.SetUniformMatrix4Name("projection", projection);
+    // default_shader_program.SetUniformMatrix4Name("model", quad_transform);
 }
 
 
 
 
-
-void ExampleSpriteUpdateDraw(float dt)
+void ExampleSpriteUpdateDraw(float dt, Input input)
 {
-    glClearColor(0.1f, 0.1f, 0.1f, 1.f);
-    glClear(GL_COLOR_BUFFER_BIT /*| GL_DEPTH_BUFFER_BIT*/);
-
     default_shader_program.UseProgram();
+
+    projection = glm::ortho(0.f, (float)WND_WIDTH, 0.f, (float)WND_HEIGHT, .1f, 10.f);
+    view       = glm::lookAt(glm::vec3(0.f, 0.f, 2.0f), glm::vec3(0.f, 0.f, 0.f), glm::vec3(0.0f, 1.0f, 0.0f));
     default_shader_program.SetUniformMatrix4Name("view", view);
+    default_shader_program.SetUniformMatrix4Name("projection", projection);
 
 
-
-    float x = 0, y = 0, z = 0;
+    static float theta = 0;
+    float        x = 0, y = 0, z = 0;
     if (input.up) y += 250.f * dt;
     if (input.down) y -= 250.f * dt;
     if (input.left) x -= 250.f * dt;
     if (input.right) x += 250.f * dt;
+    if (input.Q) theta += 1.f;
+    if (input.E) theta -= 1.f;
 
     {
-        glm::mat4 model = glm::mat4(1.0f);
-        model           = glm::translate(model, { quad_pos.x += x, quad_pos.y += y, 0.f });
+        Matrix4 model = Identity();
 
-        model = glm::translate(model, { 0.5f * tex_width, 0.5f * tex_height, 0.f });
-        model = glm::rotate(model, glm::degrees(0.f), { 0.f, 0.f, 1.f });
-        model = glm::translate(model, { -0.5f * tex_width, -0.5f * tex_height, 0.f });
-
-        model = glm::scale(model, { tex_width, tex_height, 1.0f });
-
+        model = model * Scale({ (float)texture.tex_width, (float)texture.tex_height, 1.0f })
+            * RotateZ(Radians(theta))
+            * Translate({ quad_pos.x += x, quad_pos.y += y, 0.f });
         default_shader_program.SetUniformMatrix4Name("model", model);
     }
 
     {
-        glBindTexture(GL_TEXTURE_2D, texture);
+        glBindTexture(GL_TEXTURE_2D, texture.texture);
         glBindVertexArray(vao_quad);
         glDrawElements(GL_TRIANGLES, sizeof(Quad::indices) / sizeof(Quad::indices[0]), GL_UNSIGNED_INT, 0);
     }

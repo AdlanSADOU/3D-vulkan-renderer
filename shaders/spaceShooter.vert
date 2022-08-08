@@ -7,6 +7,8 @@ uniform mat4 projection;
 uniform mat4 view;
 uniform mat4 model;
 
+uniform mat4 rotTest;
+
 mat4 viewproj;
 
 out vec4 outColor;

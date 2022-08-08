@@ -2,6 +2,8 @@
 #include <stdlib.h>
 #include <string>
 
+
+#define STB_IMAGE_IMPLEMENTATION
 #include <adGL.h>
 #include <GL/glew.h>
 #include <SDL2/SDL.h>
@@ -78,8 +80,8 @@ extern int main(int argc, char **argv)
 
 
     // ExampleSPriteInit();
-    // Example3DInit();
-    InitSpaceShooter();
+    Example3DInit();
+    // InitSpaceShooter();
 
 
     while (g_running) {
@@ -160,9 +162,12 @@ extern int main(int argc, char **argv)
             acc = 0;
         }
 
-        // ExampleSpriteUpdateDraw(dt_averaged);
-        // Example3DUpdateDraw(dt_averaged, input);
-        UpdateDrawSpaceShooter(dt_averaged, input);
+        glClearColor(.2f, .2f, .2f, 1.f);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+        // ExampleSpriteUpdateDraw(dt_averaged, input);
+        Example3DUpdateDraw(dt_averaged, input);
+        // UpdateDrawSpaceShooter(dt_averaged, input);
 
         SDL_GL_SwapWindow(window);
 

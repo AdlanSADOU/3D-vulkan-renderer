@@ -1,7 +1,12 @@
-#include "adgl.h"
-#include "shader.h"
+/*TODO
+    model loading
+    texture management
+    lighting
+    3D animation
 
-#include "stb_image.h"
+*/
+#include "adgl.h"
+#include "Mesh.h"
 
 extern u32 WND_WIDTH;
 extern u32 WND_HEIGHT;
@@ -17,20 +22,20 @@ static float triangle_verts[] = {
     0.0f, 0.5f, -0.5f
 };
 
-static float cube_verts[] = {
+static std::vector<Vertex> cube_verts = {
     // front
-    -1.0, -1.0, 1.0, 0.0, 0.0,
-    1.0, -1.0, 1.0, 1.0, 0.0,
-    1.0, 1.0, 1.0, 1.0, 1.0,
-    -1.0, 1.0, 1.0, 0.0, 1.0,
+    { -1.0, -1.0, 1.0, 1.0, 1.0, 1.0, 0.0, 0.0 },
+    { 1.0, -1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.0 },
+    { 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0 },
+    { -1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.0, 1.0 },
     // back
-    -1.0, -1.0, -1.0, 0.0, 0.0,
-    1.0, -1.0, -1.0, 1.0, 0.0,
-    1.0, 1.0, -1.0, 1.0, 1.0,
-    -1.0, 1.0, -1.0, 0.0, 1.0
+    { -1.0, -1.0, -1.0, 1.0, 1.0, 1.0, 0.0, 0.0 },
+    { 1.0, -1.0, -1.0, 1.0, 1.0, 1.0, 1.0, 0.0 },
+    { 1.0, 1.0, -1.0, 1.0, 1.0, 1.0, 1.0, 1.0 },
+    { -1.0, 1.0, -1.0, 1.0, 1.0, 1.0, 0.0, 1.0 }
 };
 
-static u16 cube_indices[] = {
+static std::vector<u16> cube_indices = {
     // front
     0, 1, 2,
     2, 3, 0,
@@ -55,15 +60,15 @@ static u16 triangle_indices[] = {
     0, 1, 2
 };
 
-struct Mesh
-{
-    u32 vao;
-    u32 vbo;
-    u32 ibo;
+// struct Mesh
+// {
+//     u32 vao;
+//     u32 vbo;
+//     u32 ibo;
 
-    Vector3 position;
-    Matrix4 transform;
-};
+//     Vector3 position;
+//     Matrix4 transform;
+// };
 
 static Mesh cube;
 
@@ -88,49 +93,14 @@ struct Camera
 };
 static Camera camera = {};
 
+Vector3 cubePosition;
 
 void Example3DInit()
 {
-    glGenVertexArrays(1, &cube.vao);
-    glBindVertexArray(cube.vao);
-    // glGenBuffers(1, &cube.ibo);
+    cube.Create(cube_verts, cube_indices);
 
-    glGenBuffers(1, &cube.vbo);
-    glBindBuffer(GL_ARRAY_BUFFER, cube.vbo);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(cube_verts) /*bytes*/, cube_verts, GL_STATIC_DRAW);
-
-    glGenBuffers(1, &cube.ibo);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, cube.ibo);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(cube_indices) /*bytes*/, cube_indices, GL_STATIC_DRAW);
-
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(
-        0 /*layout location*/,
-        3 /*number of components*/,
-        GL_FLOAT /*type of components*/,
-        GL_FALSE,
-        sizeof(float) * 5,
-        (void *)0);
-
-    glEnableVertexAttribArray(1);
-    glVertexAttribPointer(
-        1 /*layout location*/,
-        2 /*number of components*/,
-        GL_FLOAT /*type of components*/,
-        GL_FALSE,
-        sizeof(float) * 5,
-        (void *)0);
-
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-
-
-
-
-    //////////////////////////////////////
-    /// Texture
-    char texture_path[] = "assets/brick_wall.jpg";
+    char texture_path[]
+        = "assets/brick_wall.jpg";
 
     unsigned char *pixels = stbi_load(texture_path, &tex_width, &tex_height, &nrChannels, 0);
     if (!pixels) {
@@ -172,13 +142,13 @@ void Example3DInit()
 
 
     // Matrices setup
-    Matrix4 projection = Matrix4::Perspective(.01f, 1000.f, 45.f, ((float)WND_HEIGHT / (float)WND_WIDTH));
+    Matrix4 projection = Perspective(.01f, 1000.f, 45.f, (float)WND_WIDTH / (float)WND_HEIGHT);
     shaderProg.SetUniformMatrix4Name("projection", projection);
 
 
     cube.transform = {};
-    cube.position  = { 0.f, 0.f, -6.f };
-    cube.transform = Matrix4::Translate(cube.position);
+    cubePosition   = { 0.f, 0.f, -6.f };
+    cube.transform = Translate(cubePosition);
     shaderProg.SetUniformMatrix4Name("model", cube.transform);
 
 
@@ -197,9 +167,6 @@ float sensitivity = 0.16f;
 float fov         = 45;
 void  Example3DUpdateDraw(float dt, Input input)
 {
-    glClearColor(0.3f, 0.3f, 0.3f, 1.f);
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
     shaderProg.UseProgram();
 
     Vector3 directionDelta { 0, 0, 0 };
@@ -242,8 +209,8 @@ void  Example3DUpdateDraw(float dt, Input input)
 
 
 
-    cube.transform = Matrix4::Translate(cube.position);
-    // shaderProg.SetUniformMatrix4Name("model", cube.transform);
+    cube.transform = Translate(cubePosition);
+    shaderProg.SetUniformMatrix4Name("model", cube.transform);
 
     static float xrelPrev = 0;
     static float yrelPrev = 0;
@@ -256,16 +223,15 @@ void  Example3DUpdateDraw(float dt, Input input)
         // printVec("rel", {(float)xrel, (float)yrel, 0});
 
         if (xrelPrev != xrel)
-            camera.yaw
-                += xrel * .1f * sensitivity;
+            camera.yaw += xrel * .1f * sensitivity;
         if (xrelPrev != xrel)
-            camera.pitch += yrel * .008f * sensitivity;
+            camera.pitch -= yrel * .1f * sensitivity;
     } else
         SDL_SetRelativeMouseMode(SDL_FALSE);
 
-    camera.forward.x  = cos(Radians(camera.yaw)) * cos(camera.pitch);
-    camera.forward.y  = sin(camera.pitch);
-    camera.forward.z  = sin(Radians(camera.yaw)) * cos(camera.pitch);
+    camera.forward.x  = cos(Radians(camera.yaw)) * cos(Radians(camera.pitch));
+    camera.forward.y  = sin(Radians(camera.pitch));
+    camera.forward.z  = sin(Radians(camera.yaw)) * cos(Radians(camera.pitch));
     camera.forward    = camera.forward.Normalized();
     xrelPrev          = xrel;
     yrelPrev          = yrel;
@@ -274,24 +240,15 @@ void  Example3DUpdateDraw(float dt, Input input)
     // printVec("camPos", camera.position);
     // camera.position += directionDelta;
 
-    // Matrix4 projection = Matrix4::Perspective(.1f, 100.f, fov, ((float)WND_HEIGHT / (float)WND_WIDTH));
+    // Matrix4 projection = Perspective(.1f, 100.f, fov, ((float)WND_HEIGHT / (float)WND_WIDTH));
     // shaderProg.SetUniformMatrix4Name("projection", projection);
 
     Vector3 at   = camera.position + camera.forward;
     Matrix4 view = LookAt(camera.position, at, camera.up);
     shaderProg.SetUniformMatrix4Name("view", view);
 
-    // glm::mat4 projection = glm::perspective(fov, ((float)WND_HEIGHT / (float)WND_WIDTH), .1f, 100.f);
-    // shaderProg.SetUniformMatrix4Name("projection", projection);
-    // glm::vec3 at;
-    // at.x = camera.position.x + camera.forward.x;
-    // at.y = camera.position.y + camera.forward.y;
-    // at.z = camera.position.z + camera.forward.z;
-    // glm::mat4 view = glm::lookAt(glm::vec3(camera.position.x, camera.position.y, camera.position.z), glm::vec3(at.x, at.y, at.z), glm::vec3(0, 1, 0));
-    // shaderProg.SetUniformMatrix4Name("view", view);
-
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, cube.ibo);
-    glBindVertexArray(cube.vao);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, cube.IBO);
+    glBindVertexArray(cube.VAO);
     glBindTexture(GL_TEXTURE_2D, texture);
-    glDrawElements(GL_TRIANGLES, sizeof(cube_indices) / sizeof(cube_indices[0]), GL_UNSIGNED_SHORT, (void *)0);
+    glDrawElements(GL_TRIANGLES, cube.indices.size(), GL_UNSIGNED_SHORT, (void *)0);
 }

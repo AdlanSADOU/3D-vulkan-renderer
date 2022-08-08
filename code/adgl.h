@@ -1,16 +1,13 @@
 #if !defined(ADGL_H)
 #define ADGL_H
 
-#define MATH_3D_IMPLEMENTATION
-// #define GLM_FORCE_RADIANS 1
-#include <glm/glm.hpp>
-#include <glm/gtc/matrix_transform.hpp>
-#include <glm/gtc/type_ptr.hpp>
 
 #include <GL/glew.h>
 #include <GL/gl.h>
 #include <GL/glu.h>
 #include <SDL2/SDL.h>
+
+#include "stb_image.h"
 
 #define u32 uint32_t
 #define u16 uint16_t
@@ -43,53 +40,15 @@ struct Input
     {
         int32_t xrel;
         int32_t yrel;
-        bool left;
-        bool right;
+        bool    left;
+        bool    right;
     } mouse;
-};
-
-struct Vertex2D
-{
-    glm::vec2 vPos;
-    glm::vec4 vColor;
-    glm::vec2 vTexCoord;
-};
-
-struct Quad
-{
-    static inline Vertex2D vertices[4] = {
-        { {
-              +0.5f,
-              +0.5f,
-          },
-            { 1.0, 1.0, 1.0, 1.0 }, { 1, 1 } },
-        { {
-              +0.5f,
-              -0.5f,
-          },
-            { 1.0, 1.0, 1.0, 1.0 }, { 1, 0 } },
-        { {
-              -0.5f,
-              -0.5f,
-          },
-            { 1.0, 1.0, 1.0, 1.0 }, { 0, 0 } },
-        { {
-              -0.5f,
-              +0.5f,
-          },
-            { 1.0, 1.0, 1.0, 1.0 }, { 0, 1 } },
-    };
-
-    static inline GLuint indices[6] = {
-        0, 1, 3,
-        1, 2, 3
-    };
 };
 
 
 
 void ExampleSPriteInit();
-void ExampleSpriteUpdateDraw(float dt);
+void ExampleSpriteUpdateDraw(float dt, Input input);
 
 void Example3DInit();
 void Example3DUpdateDraw(float dt, Input input);
