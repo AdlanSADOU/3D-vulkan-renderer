@@ -8,6 +8,9 @@
 #include "adgl.h"
 #include "Mesh.h"
 
+#define CGLTF_IMPLEMENTATION
+#include "cgltf.h"
+
 extern u32 WND_WIDTH;
 extern u32 WND_HEIGHT;
 
@@ -60,16 +63,6 @@ static u16 triangle_indices[] = {
     0, 1, 2
 };
 
-// struct Mesh
-// {
-//     u32 vao;
-//     u32 vbo;
-//     u32 ibo;
-
-//     Vector3 position;
-//     Matrix4 transform;
-// };
-
 static Mesh cube;
 
 // material
@@ -97,7 +90,54 @@ Vector3 cubePosition;
 
 void Example3DInit()
 {
-    cube.Create(cube_verts, cube_indices);
+    cgltf_options options = {};
+    cgltf_data *  data    = NULL;
+    cgltf_result  result  = cgltf_parse_file(&options, "assets/cube.gltf", &data);
+
+    if (result == cgltf_result_success) {
+        result = cgltf_load_buffers(&options, data, "assets/cube.gltf");
+
+        SDL_Log("%d", data->scenes[0].nodes[0]->mesh->primitives_count);
+        // SDL_Log("%d", data->scenes[0].nodes[0]->mesh->);
+
+        for (cgltf_size i = 0; i < data->scenes[0].nodes[0]->mesh->primitives_count; ++i) {
+            SDL_Log("%d ", data->scenes[0].nodes[0]->mesh->primitives->indices);
+        }
+    }
+
+
+    std::vector<Vertex>   vertices;
+    std::vector<uint16_t> indices;
+
+    for (size_t i = 0; i < data->meshes_count; i++) {
+        for (size_t j = 0; j < data->meshes[i].primitives_count; j++) {
+            {
+                cgltf_buffer_view *positions = data->meshes[i].primitives[j].attributes[0].data->buffer_view;
+                cgltf_buffer_view *normals   = data->meshes[i].primitives[j].attributes[1].data->buffer_view;
+                cgltf_buffer_view *texCoords = data->meshes[i].primitives[j].attributes[2].data->buffer_view;
+
+                for (size_t a = 0; a < data->meshes[i].primitives[j].attributes[i].data->count; a++) {
+                    Vertex vert;
+                    vert.position = ((Vector3 *)(((char *)positions->buffer->data) + positions->offset))[a];
+                    vert.normal   = ((Vector3 *)(((char *)normals->buffer->data) + normals->offset))[a];
+                    vert.texCoord = ((Vector2 *)(((char *)texCoords->buffer->data) + texCoords->offset))[a];
+                    vertices.push_back(vert);
+                }
+            }
+
+            cgltf_buffer_view *indices_view = data->meshes[i].primitives[j].indices[i].buffer_view;
+            for (size_t b = 0; b < data->meshes[i].primitives[j].indices[i].count; b++) {
+                indices.push_back(((uint16_t *)((char *)indices_view->buffer->data + indices_view->offset))[b]);
+            }
+        }
+    }
+
+    cube.Create(vertices, indices);
+
+
+
+    // cube.Create(cube_verts, data->scenes[0].nodes[0]->mesh->primitives->indices[0].buffer_view->buffer->data);
+    // cube.Create(cube_verts, cube_indices);
 
     char texture_path[]
         = "assets/brick_wall.jpg";

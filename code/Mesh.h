@@ -14,6 +14,14 @@ struct Vertex
     Vector2 texCoord;
 };
 
+struct VertexSOA
+{
+    Vector3 *position;
+    Vector3 *normal;
+    Vector2 *texCoord;
+};
+
+
 struct Mesh
 {
     std::vector<Vertex>   vertices;
@@ -23,6 +31,7 @@ struct Mesh
     uint32_t              VBO;
     uint32_t              IBO;
     Matrix4               transform;
+
 
     void Create(std::vector<Vertex> vertices, std::vector<uint16_t> indices)
     {
