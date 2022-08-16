@@ -60,6 +60,7 @@
         "*.rh": "cpp",
         "xtree": "cpp",
         "bit": "cpp",
-        "clocale": "cpp"
+        "clocale": "cpp",
+        "map": "cpp"
     }
 }

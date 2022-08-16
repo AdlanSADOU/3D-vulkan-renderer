@@ -1,213 +1,133 @@
 /*TODO
+    Adding materials to Model: the way we are currently handling this
+    is quite... meh. Dont pre-size the Model.submeshMaterials
+    it's too error prone.
+    Instead do Model.submeshMaterials.push_back()
+
     model loading
     texture management
     lighting
     3D animation
 
+    Issues:
+    - for some reason the cube texture is being used on the feet.
+    Feet is mesh the first drawn mesh.
+    One cause might be, as the cube is being drawn last, than the last bound
+    material is used on the next iteration, which are the feet.
+
+    [checked: false assumption]
+    changing draw order does not affect the issue
+
+    [solved] the issue was that the original texture for feet has been overwritten
+    by the texture for the sword
+
+    [solution] make blender output texture names prefixed with project name... or something
+
 */
+#define CGLTF_IMPLEMENTATION
 #include "adgl.h"
 #include "Mesh.h"
-
-#define CGLTF_IMPLEMENTATION
-#include "cgltf.h"
+#include "Camera.h"
 
 extern u32 WND_WIDTH;
 extern u32 WND_HEIGHT;
 
-static void printVec(const char *name, Vector3 v)
-{
-    SDL_Log("%s: (%f, %f, %f)\n", name, v.x, v.y, v.z);
-}
-
-static float triangle_verts[] = {
-    -0.5f, -0.5f, -0.5f,
-    0.5f, -0.5f, -0.5f,
-    0.0f, 0.5f, -0.5f
-};
-
-static std::vector<Vertex> cube_verts = {
-    // front
-    { -1.0, -1.0, 1.0, 1.0, 1.0, 1.0, 0.0, 0.0 },
-    { 1.0, -1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.0 },
-    { 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0 },
-    { -1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.0, 1.0 },
-    // back
-    { -1.0, -1.0, -1.0, 1.0, 1.0, 1.0, 0.0, 0.0 },
-    { 1.0, -1.0, -1.0, 1.0, 1.0, 1.0, 1.0, 0.0 },
-    { 1.0, 1.0, -1.0, 1.0, 1.0, 1.0, 1.0, 1.0 },
-    { -1.0, 1.0, -1.0, 1.0, 1.0, 1.0, 0.0, 1.0 }
-};
-
-static std::vector<u16> cube_indices = {
-    // front
-    0, 1, 2,
-    2, 3, 0,
-    // right
-    1, 5, 6,
-    6, 2, 1,
-    // back
-    7, 6, 5,
-    5, 4, 7,
-    // left
-    4, 0, 3,
-    3, 7, 4,
-    // bottom
-    4, 5, 1,
-    1, 0, 4,
-    // top
-    3, 2, 6,
-    6, 7, 3
-};
-
-static u16 triangle_indices[] = {
-    0, 1, 2
-};
-
-static Mesh cube;
-
-// material
-static Shader        vertexShader;
-static Shader        fragShader;
-static ShaderProgram shaderProg;
-
 static GLuint texture;
 static int    tex_width, tex_height, nrChannels;
 
-//camera
-struct Camera
-{
-    Vector3 position;
-    Vector3 up;
-    Vector3 right;
-    Vector3 forward;
-    float   pitch;
-    float   yaw;
-    float   roll;
-};
 static Camera camera = {};
 
-Vector3 cubePosition;
+// static Model    milechar;
+static Material mileMaterial_1;
+static Material mileMaterial_2;
+static Material mileMaterial_3;
+static Material cubeMaterial;
+static Material chibiMaterial;
+
+static Texture mileTexture_1;
+static Texture mileTexture_2;
+static Texture mileTexture_3;
+static Texture cubeTexture;
+static Texture chibiTexture;
+
+static const char *vertexShaderPath   = "./shaders/3DVertexShader.vert";
+static const char *fragmentShaderPath = "./shaders/fragmentShader.frag";
+
+struct Entity
+{
+    Model   model;
+    Vector3 position;
+    Vector3 rotation;
+    Vector3 scale;
+};
+
+Mesh cubeMesh {};
+
+Entity entities[3] {};
 
 void Example3DInit()
 {
-    cgltf_options options = {};
-    cgltf_data *  data    = NULL;
-    cgltf_result  result  = cgltf_parse_file(&options, "assets/cube.gltf", &data);
+    std::string lowPoly01       = "low_poly_01.gltf";
+    std::string char05Milestone = "char_05_milestone.gltf";
 
-    if (result == cgltf_result_success) {
-        result = cgltf_load_buffers(&options, data, "assets/cube.gltf");
+    std::string path = "assets/" + char05Milestone;
 
-        SDL_Log("%d", data->scenes[0].nodes[0]->mesh->primitives_count);
-        // SDL_Log("%d", data->scenes[0].nodes[0]->mesh->);
+    mileTexture_1.Create("assets/material.png");
+    mileTexture_2.Create("assets/material-1.png");
+    mileTexture_3.Create("assets/material-2.png");
 
-        for (cgltf_size i = 0; i < data->scenes[0].nodes[0]->mesh->primitives_count; ++i) {
-            SDL_Log("%d ", data->scenes[0].nodes[0]->mesh->primitives->indices);
-        }
-    }
+    mileMaterial_1.Create(vertexShaderPath, fragmentShaderPath, &mileTexture_1);
+    mileMaterial_2.Create(vertexShaderPath, fragmentShaderPath, &mileTexture_2);
+    mileMaterial_3.Create(vertexShaderPath, fragmentShaderPath, &mileTexture_3);
 
-
-    std::vector<Vertex>   vertices;
-    std::vector<uint16_t> indices;
-
-    for (size_t i = 0; i < data->meshes_count; i++) {
-        for (size_t j = 0; j < data->meshes[i].primitives_count; j++) {
-            {
-                cgltf_buffer_view *positions = data->meshes[i].primitives[j].attributes[0].data->buffer_view;
-                cgltf_buffer_view *normals   = data->meshes[i].primitives[j].attributes[1].data->buffer_view;
-                cgltf_buffer_view *texCoords = data->meshes[i].primitives[j].attributes[2].data->buffer_view;
-
-                for (size_t a = 0; a < data->meshes[i].primitives[j].attributes[i].data->count; a++) {
-                    Vertex vert;
-                    vert.position = ((Vector3 *)(((char *)positions->buffer->data) + positions->offset))[a];
-                    vert.normal   = ((Vector3 *)(((char *)normals->buffer->data) + normals->offset))[a];
-                    vert.texCoord = ((Vector2 *)(((char *)texCoords->buffer->data) + texCoords->offset))[a];
-                    vertices.push_back(vert);
-                }
-            }
-
-            cgltf_buffer_view *indices_view = data->meshes[i].primitives[j].indices[i].buffer_view;
-            for (size_t b = 0; b < data->meshes[i].primitives[j].indices[i].count; b++) {
-                indices.push_back(((uint16_t *)((char *)indices_view->buffer->data + indices_view->offset))[b]);
-            }
-        }
-    }
-
-    cube.Create(vertices, indices);
+    entities[0].model.Create(path.c_str());
+    entities[0].model._meshes[0].submeshMaterials[0] = &mileMaterial_1;
+    entities[0].model._meshes[0].submeshMaterials[1] = &mileMaterial_2;
+    entities[0].model._meshes[0].submeshMaterials[2] = &mileMaterial_3;
+    entities[0].model._transform                     = Identity();
+    entities[0].position                             = { 0.f, 0.f, -6.f };
+    entities[0].rotation                             = { 0.f, 0.f, 0.f };
+    entities[0].scale                                = { .05, .05, .05 };
 
 
+    // cubeMesh.submeshCount = 1;
+    // cubeMesh.submeshVertices.push_back(cube_verts);
+    // cubeMesh.submeshIndices.push_back(cube_indices);
+    // cubeMesh.Create();
+    cubeTexture.Create("assets/cube.png");
+    cubeMaterial.Create(vertexShaderPath, fragmentShaderPath, &cubeTexture);
 
-    // cube.Create(cube_verts, data->scenes[0].nodes[0]->mesh->primitives->indices[0].buffer_view->buffer->data);
-    // cube.Create(cube_verts, cube_indices);
-
-    char texture_path[]
-        = "assets/brick_wall.jpg";
-
-    unsigned char *pixels = stbi_load(texture_path, &tex_width, &tex_height, &nrChannels, 0);
-    if (!pixels) {
-        SDL_LogCritical(0, "Failed to load texture: %s", texture_path);
-    }
-
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    entities[1].model.Create("assets/cube.gltf");
+    entities[1].model._meshes[0].submeshMaterials[0] = (&cubeMaterial);
+    entities[1].model._transform                     = Identity();
+    entities[1].position                             = { -4.f, 0, -6.f };
+    entities[1].scale                                = { 1, 1, 1 };
+    entities[1].rotation                             = { 0, -90, 0 };
 
 
-    glGenTextures(1, &texture);
-    glBindTexture(GL_TEXTURE_2D, texture);
-    if (nrChannels == 4)
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, tex_width, tex_height, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
-    else if (nrChannels == 3)
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, tex_width, tex_height, 0, GL_RGB, GL_UNSIGNED_BYTE, pixels);
-    glGenerateMipmap(GL_TEXTURE_2D);
-    stbi_image_free(pixels);
-    glBindTexture(GL_TEXTURE_2D, 0);
+    // chibiTexture.Create("assets/lambert1 Base Color.png");
+    // chibiMaterial.Create(vertexShaderPath, fragmentShaderPath, &chibiTexture);
 
+    // entities[2].model.Create("assets/chibi_02_ex.gltf");
+    // entities[2].model._meshes[0].submeshMaterials[0] = &chibiMaterial;
+    // entities[2].model._transform                     = Identity();
+    // entities[2].position                             = { 4.f, 0.f, -6.f };
+    // entities[2].rotation                             = { 0.f, 0.f, 0.f };
+    // entities[2].scale                                = { .05, .05, .05 };
 
-
-
-    // Shader setup
-    vertexShader.CreateAndCompile("./shaders/3DVertexShader.vert", GL_VERTEX_SHADER);
-    fragShader.CreateAndCompile("./shaders/fragmentShader.frag", GL_FRAGMENT_SHADER);
-    shaderProg.AddShader(&vertexShader);
-    shaderProg.AddShader(&fragShader);
-
-    if (!shaderProg.CreateAndLinkProgram()) {
-        SDL_Log("shader prog failed\n");
-        exit(1);
-    }
-    shaderProg.UseProgram();
-
-
-
-
-    // Matrices setup
-    Matrix4 projection = Perspective(.01f, 1000.f, 45.f, (float)WND_WIDTH / (float)WND_HEIGHT);
-    shaderProg.SetUniformMatrix4Name("projection", projection);
-
-
-    cube.transform = {};
-    cubePosition   = { 0.f, 0.f, -6.f };
-    cube.transform = Translate(cubePosition);
-    shaderProg.SetUniformMatrix4Name("model", cube.transform);
-
-
-    camera.position = { 0, 0, 16 };
+    camera.position = { 0, 5, 16 };
     camera.forward  = { 0, 0, -1 };
     camera.up       = { 0, 1, 0 };
     camera.yaw      = -90;
     camera.pitch    = 0;
-
-    // glm::mat4 view = glm::lookAt(glm::vec3(0, 0, 3), glm::vec3(0, 0, 0), glm::vec3(0, 1, 0));
-    // shaderProg.SetUniformMatrix4Name("view", view);
 }
 
-float speed       = 5.f;
-float sensitivity = 0.16f;
-float fov         = 45;
-void  Example3DUpdateDraw(float dt, Input input)
+float speed       = 15.f;
+float sensitivity = 0.46f;
+float fov         = 60;
+
+void Example3DUpdateDraw(float dt, Input input)
 {
-    shaderProg.UseProgram();
 
     Vector3 directionDelta { 0, 0, 0 };
 
@@ -244,13 +164,10 @@ void  Example3DUpdateDraw(float dt, Input input)
     if (input.right) {
         camera.position += speed * Vector3::Normalize(Vector3::Cross(camera.forward, camera.up)) * dt;
     }
-    if (input.E) fov += .1f;
-    if (input.Q) fov -= .1f;
 
-
-
-    cube.transform = Translate(cubePosition);
-    shaderProg.SetUniformMatrix4Name("model", cube.transform);
+    static float factor = 0;
+    if (input.E) factor += .01f;
+    if (input.Q) factor -= .01f;
 
     static float xrelPrev = 0;
     static float yrelPrev = 0;
@@ -269,26 +186,42 @@ void  Example3DUpdateDraw(float dt, Input input)
     } else
         SDL_SetRelativeMouseMode(SDL_FALSE);
 
-    camera.forward.x  = cos(Radians(camera.yaw)) * cos(Radians(camera.pitch));
-    camera.forward.y  = sin(Radians(camera.pitch));
-    camera.forward.z  = sin(Radians(camera.yaw)) * cos(Radians(camera.pitch));
-    camera.forward    = camera.forward.Normalized();
-    xrelPrev          = xrel;
-    yrelPrev          = yrel;
-    camera.position.y = 0;
 
-    // printVec("camPos", camera.position);
-    // camera.position += directionDelta;
+    camera.forward.x = cos(Radians(camera.yaw)) * cos(Radians(camera.pitch));
+    camera.forward.y = sin(Radians(camera.pitch));
+    camera.forward.z = sin(Radians(camera.yaw)) * cos(Radians(camera.pitch));
+    camera.forward   = camera.forward.Normalized();
+    xrelPrev         = xrel;
+    yrelPrev         = yrel;
 
-    // Matrix4 projection = Perspective(.1f, 100.f, fov, ((float)WND_HEIGHT / (float)WND_WIDTH));
-    // shaderProg.SetUniformMatrix4Name("projection", projection);
 
-    Vector3 at   = camera.position + camera.forward;
-    Matrix4 view = LookAt(camera.position, at, camera.up);
-    shaderProg.SetUniformMatrix4Name("view", view);
+    Vector3      at         = camera.position + camera.forward;
+    Matrix4      projection = Perspective(.01f, 1000.f, fov, (float)WND_WIDTH / (float)WND_HEIGHT);
+    Matrix4      view       = LookAt(camera.position, at, camera.up);
+    static float modelYaw   = 0;
+    modelYaw += 1.f;
+    entities[0].rotation.y = modelYaw;
 
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, cube.IBO);
-    glBindVertexArray(cube.VAO);
-    glBindTexture(GL_TEXTURE_2D, texture);
-    glDrawElements(GL_TRIANGLES, cube.indices.size(), GL_UNSIGNED_SHORT, (void *)0);
+    for (size_t n = 0; n < ARR_COUNT(entities) - 1; n++) {
+        for (int i = 0; i < entities[n].model._meshCount; i++) {
+            Matrix4 model = Scale(entities[n].scale)
+                * RotateZ(Radians(entities[n].rotation.z))
+                * RotateY(Radians(entities[n].rotation.y))
+                * RotateX(Radians(entities[n].rotation.x))
+                * Translate(entities[n].position)
+                * entities[n].model._transform;
+
+            for (int j = 0; j < entities[n].model._meshes[i].submeshCount; j++) {
+                entities[n].model._meshes[i].submeshMaterials[j]->_program.UseProgram();
+                entities[n].model._meshes[i].submeshMaterials[j]->_program.SetUniformMatrix4Name("projection", projection);
+                entities[n].model._meshes[i].submeshMaterials[j]->_program.SetUniformMatrix4Name("view", view);
+                entities[n].model._meshes[i].submeshMaterials[j]->_program.SetUniformMatrix4Name("model", model);
+
+                glBindVertexArray(entities[n].model._meshes[i].VAOs[j]);
+                glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, entities[n].model._meshes[i].IBOs[j]);
+                glBindTexture(GL_TEXTURE_2D, entities[n].model._meshes[i].submeshMaterials[j]->_texture->id);
+                glDrawElements(GL_TRIANGLES, entities[n].model._meshes[i].submeshIndices[j].size(), GL_UNSIGNED_SHORT, (void *)0);
+            }
+        }
+    }
 }

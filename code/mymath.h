@@ -5,7 +5,7 @@
 */
 #pragma once
 
-#include "SDL2/SDL.h"
+#include <math.h>
 
 #define PI 3.14159265358979323846264338327950288
 
@@ -253,8 +253,8 @@ static Matrix4 RotateX(float radians)
     Matrix4 xrot {};
     xrot = {
         1, 0, 0, 0,
-        0, cos(radians), -sin(radians), 0,
-        0, sin(radians), cos(radians), 0,
+        0, cosf(radians), -sinf(radians), 0,
+        0, sinf(radians), cosf(radians), 0,
         0, 0, 0, 1
     };
 
@@ -263,13 +263,12 @@ static Matrix4 RotateX(float radians)
 
 static Matrix4 RotateY(float radians)
 {
-
     Matrix4 yrot {};
     yrot = {
-        cos(radians), 0, sin(radians), 0,
-        0, 1, 0, 0,
-        -sin(radians), 0, cos(radians), 0,
-        0, 0, 0, 1
+        cosf(radians), 0.f, sinf(radians), 0.f,
+        0.f, 1.f, 0.f, 0.f,
+        -sinf(radians), 0.f, cosf(radians), 0.f,
+        0.f, 0.f, 0.f, 1.f
     };
 
     return yrot;
@@ -279,8 +278,8 @@ static Matrix4 RotateZ(float radians)
 {
     Matrix4 zrot {};
     zrot = {
-        cos(radians), -sin(radians), 0, 0,
-        sin(radians), cos(radians), 0, 0,
+        cosf(radians), -sinf(radians), 0, 0,
+        sinf(radians), cosf(radians), 0, 0,
         0, 0, 1, 0,
         0, 0, 0, 1
     };
@@ -290,7 +289,7 @@ static Matrix4 RotateZ(float radians)
 
 static Matrix4 Perspective(float zNear, float zFar, float fovy, float aspect)
 {
-    float f = 1 / tan(((fovy) / 2.0f) * (M_PI / 180.0f));
+    float f = 1 / tan(((fovy) / 2.0f) * (PI / 180.0f));
 
     float x = f / aspect;
     float z = (zFar + zNear) / (zNear - zFar);

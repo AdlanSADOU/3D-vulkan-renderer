@@ -84,7 +84,7 @@ void ExampleSPriteInit()
     //////////////////////////////////////
     /// Texture
 
-    texture.Load("assets/powerup.png");
+    texture.Create("assets/powerup.png");
 
 
 
@@ -166,7 +166,7 @@ void ExampleSpriteUpdateDraw(float dt, Input input)
     }
 
     {
-        glBindTexture(GL_TEXTURE_2D, texture.texture);
+        glBindTexture(GL_TEXTURE_2D, texture.id);
         glBindVertexArray(vao_quad);
         glDrawElements(GL_TRIANGLES, sizeof(Quad::indices) / sizeof(Quad::indices[0]), GL_UNSIGNED_INT, 0);
     }

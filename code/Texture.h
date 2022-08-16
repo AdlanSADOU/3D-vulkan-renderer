@@ -4,10 +4,10 @@
 
 struct Texture
 {
-    GLuint texture;
+    GLuint id;
     int    tex_width, tex_height, nrChannels;
 
-    void Load(const char *path)
+    void Create(const char *path)
     {
         stbi_set_flip_vertically_on_load(true);
 
@@ -22,8 +22,8 @@ struct Texture
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
-        glGenTextures(1, &texture);
-        glBindTexture(GL_TEXTURE_2D, texture);
+        glGenTextures(1, &id);
+        glBindTexture(GL_TEXTURE_2D, id);
         if (nrChannels == 4)
             glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, tex_width, tex_height, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
         else if (nrChannels == 3)

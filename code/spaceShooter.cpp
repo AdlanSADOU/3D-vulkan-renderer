@@ -5,12 +5,6 @@ extern u32   WND_WIDTH;
 extern u32   WND_HEIGHT;
 static float aspect = (float)WND_WIDTH / (float)WND_HEIGHT;
 
-float triangle_verts[] = {
-    -1.f, -1.f, -1.f, .1f, .6f, .1f, 1.f,
-    1.f, -1.f, -1.f, .1f, .6f, .1f, 1.f,
-    0.f, 1.f, -1.f, .1f, .6f, .1f, 1.f
-};
-
 struct Triangle
 {
     uint32_t VAO;
