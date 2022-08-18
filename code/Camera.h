@@ -5,11 +5,11 @@
 //camera
 struct Camera
 {
-    Vector3 position;
-    Vector3 up;
-    Vector3 right;
-    Vector3 forward;
-    float   pitch;
-    float   yaw;
-    float   roll;
+    hmm_vec3 position;
+    hmm_vec3 up;
+    hmm_vec3 right;
+    hmm_vec3 forward;
+    float    pitch;
+    float    yaw;
+    float    roll;
 };

@@ -1,13 +1,12 @@
 #pragma once
 
-#include "mymath.h"
 #include "shader.h"
 #include "texture.h"
 
 #include <stb_image.h>
 #include <cgltf.h>
 #include <vector>
-
+#include <HandmadeMath.h>
 
 struct Material
 {
@@ -102,7 +101,7 @@ struct Mesh
 struct Model
 {
     std::vector<Mesh> _meshes;
-    Matrix4           _transform;
+    hmm_mat4          _transform;
     int32_t           _meshCount;
 
     void Create(const char *path)
