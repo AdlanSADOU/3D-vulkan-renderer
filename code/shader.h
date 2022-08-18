@@ -13,7 +13,6 @@
 #include <glm/gtc/type_ptr.hpp>
 
 #include <SDL2/SDL_log.h>
-#include <HandmadeMath.h>
 #include "mymath.h"
 
 #define LOG_SHADER_SOURCE 0
@@ -142,13 +141,6 @@ struct ShaderProgram
         // we could just hardcode locations to avoid querrying for names each frame..
         GLint location = GetUniformLocation(name);
         glUniformMatrix4fv(location, 1, GL_FALSE, matrix.m);
-    }
-
-    void SetUniformMatrix4Name(const char *name, const hmm_m4 *matrix)
-    {
-        // we could just hardcode locations to avoid querrying for names each frame..
-        GLint location = GetUniformLocation(name);
-        glUniformMatrix4fv(location, 1, GL_FALSE, (GLfloat *)matrix->Elements);
     }
 };
 

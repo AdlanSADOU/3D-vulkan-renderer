@@ -27,6 +27,7 @@ struct VertexSOA
     Vector3 *position;
     Vector3 *normal;
     Vector2 *texCoord;
+    
 };
 
 static void GLAPIENTRY MessageCallback(GLenum source,
