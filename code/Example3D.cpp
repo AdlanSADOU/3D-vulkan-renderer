@@ -56,7 +56,6 @@
 #include "adgl.h"
 #include "Mesh.h"
 #include "Camera.h"
-#include <HandmadeMath.h>
 
 extern u32 WND_WIDTH;
 extern u32 WND_HEIGHT;
@@ -84,10 +83,10 @@ static const char *fragmentShaderPath = "./shaders/fragmentShader.frag";
 
 struct Entity
 {
-    Model  model;
-    hmm_v3 position;
-    hmm_v3 rotation;
-    hmm_v3 scale;
+    Model     model;
+    glm::vec3 position;
+    glm::vec3 rotation;
+    glm::vec3 scale;
 };
 
 Mesh cubeMesh {};
@@ -127,11 +126,10 @@ void Example3DInit()
     entities[0].model._meshes[0].submeshMaterials[0] = &mileMaterial_1;
     entities[0].model._meshes[0].submeshMaterials[1] = &mileMaterial_2;
     entities[0].model._meshes[0].submeshMaterials[2] = &mileMaterial_3;
-    entities[0].model._transform                     = HMM_Mat4d(1);
+    entities[0].model._transform                     = glm::identity<glm::mat4>();
     entities[0].position                             = { 0.f, 0.f, -6.f };
     entities[0].rotation                             = { 0.f, 0.f, 0.f };
     entities[0].scale                                = { .05, .05, .05 };
-
 
     // cubeMesh.submeshCount = 1;
     // cubeMesh.submeshVertices.push_back(cube_verts);
@@ -142,7 +140,7 @@ void Example3DInit()
 
     entities[1].model.Create("assets/cube.gltf");
     entities[1].model._meshes[0].submeshMaterials[0] = (&cubeMaterial);
-    entities[1].model._transform                     = HMM_Mat4d(1);
+    entities[1].model._transform                     = glm::identity<glm::mat4>();
     entities[1].position                             = { -4.f, 0, -6.f };
     entities[1].scale                                = { 1, 1, 1 };
     entities[1].rotation                             = { 0, 90, 0 };
@@ -167,12 +165,12 @@ void Example3DInit()
 
 float speed       = 15.f;
 float sensitivity = 0.46f;
-float fov         = 60;
+float fov         = 45;
 
 void Example3DUpdateDraw(float dt, Input input)
 {
 
-    hmm_v3 directionDelta { 0, 0, 0 };
+    glm::vec3 directionDelta { 0, 0, 0 };
 
 #if 0
     if (input.right) {
@@ -202,16 +200,16 @@ void Example3DUpdateDraw(float dt, Input input)
         camera.position -= speed * camera.forward * dt;
     }
     if (input.left) {
-        camera.position -= speed * HMM_NormalizeVec3(HMM_Cross(camera.forward, camera.up)) * dt;
+        camera.position -= speed * glm::normalize(glm::cross(camera.forward, camera.up)) * dt;
     }
     if (input.right) {
-        camera.position += speed * HMM_NormalizeVec3(HMM_Cross(camera.forward, camera.up)) * dt;
+        camera.position += speed * glm::normalize(glm::cross(camera.forward, camera.up)) * dt;
     }
 
     static float factor = 0;
     if (input.E) factor += .01f;
     if (input.Q) factor -= .01f;
-    entities[0].position.X = factor;
+    entities[0].position.x = factor;
 
     static float xrelPrev = 0;
     static float yrelPrev = 0;
@@ -231,20 +229,20 @@ void Example3DUpdateDraw(float dt, Input input)
         SDL_SetRelativeMouseMode(SDL_FALSE);
 
 
-    camera.forward.X = cos(Radians(camera.yaw)) * cos(Radians(camera.pitch));
-    camera.forward.Y = sin(Radians(camera.pitch));
-    camera.forward.Z = sin(Radians(camera.yaw)) * cos(Radians(camera.pitch));
-    camera.forward   = HMM_NormalizeVec3(camera.forward);
+    camera.forward.x = cosf(Radians(camera.yaw)) * cosf(Radians(camera.pitch));
+    camera.forward.y = sinf(Radians(camera.pitch));
+    camera.forward.z = sinf(Radians(camera.yaw)) * cosf(Radians(camera.pitch));
+    camera.forward   = glm::normalize(camera.forward);
     xrelPrev         = xrel;
     yrelPrev         = yrel;
 
 
-    hmm_v3       at         = camera.position + camera.forward;
-    hmm_mat4     projection = HMM_Perspective(fov, (float)WND_WIDTH / (float)WND_HEIGHT, .01f, 1000.f);
-    hmm_mat4     view       = HMM_LookAt(camera.position, at, camera.up);
+    glm::vec3    at         = camera.position + camera.forward;
+    glm::mat4    projection = glm::perspective((fov), (float)WND_WIDTH / (float)WND_HEIGHT, .01f, 1000.f);
+    glm::mat4    view       = glm::lookAt(camera.position, at, camera.up);
     static float modelYaw   = 0;
     modelYaw += 1.f;
-    entities[0].rotation.Y = modelYaw;
+    entities[0].rotation.y = modelYaw;
 
     /**
      * draw
@@ -252,18 +250,19 @@ void Example3DUpdateDraw(float dt, Input input)
 
     for (size_t n = 0; n < ARR_COUNT(entities) - 1; n++) {
         for (int i = 0; i < entities[n].model._meshCount; i++) {
-            hmm_mat4 model = HMM_Translate(entities[n].position)
-                * HMM_Rotate((entities[n].rotation.X), { 1, 0, 0 })
-                * HMM_Rotate((entities[n].rotation.Y), { 0, 1, 0 })
-                * HMM_Rotate((entities[n].rotation.Z), { 0, 0, 1 })
-                * HMM_Scale(entities[n].scale)
+            glm::mat4 model = glm::mat4(1);
+            model           = glm::translate(model, entities[n].position)
+                * glm::rotate(model, (Radians(entities[n].rotation.x)), glm::vec3(1, 0, 0))
+                * glm::rotate(model, (Radians(entities[n].rotation.y)), glm::vec3(0, 1, 0))
+                * glm::rotate(model, (Radians(entities[n].rotation.z)), glm::vec3(0, 0, 1))
+                * glm::scale(model, entities[n].scale)
                 * entities[n].model._transform;
 
             for (int j = 0; j < entities[n].model._meshes[i].submeshCount; j++) {
                 entities[n].model._meshes[i].submeshMaterials[j]->_program.UseProgram();
-                entities[n].model._meshes[i].submeshMaterials[j]->_program.SetUniformMatrix4Name("projection", &projection);
-                entities[n].model._meshes[i].submeshMaterials[j]->_program.SetUniformMatrix4Name("view", &view);
-                entities[n].model._meshes[i].submeshMaterials[j]->_program.SetUniformMatrix4Name("model", &model);
+                entities[n].model._meshes[i].submeshMaterials[j]->_program.SetUniformMatrix4Name("projection", projection);
+                entities[n].model._meshes[i].submeshMaterials[j]->_program.SetUniformMatrix4Name("view", view);
+                entities[n].model._meshes[i].submeshMaterials[j]->_program.SetUniformMatrix4Name("model", model);
 
                 glBindVertexArray(entities[n].model._meshes[i].VAOs[j]);
                 glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, entities[n].model._meshes[i].IBOs[j]);

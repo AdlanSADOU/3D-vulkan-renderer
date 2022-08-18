@@ -7,6 +7,7 @@
 #include <GL/glew.h>
 #include <GL/gl.h>
 #include <GL/glu.h>
+#include <GLM/glm.hpp>
 #include <SDL2/SDL.h>
 #include <vector>
 

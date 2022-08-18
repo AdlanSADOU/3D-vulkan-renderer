@@ -5,7 +5,6 @@
 
 #define STB_IMAGE_IMPLEMENTATION
 #include <adGL.h>
-#include <GL/glew.h>
 #include <SDL2/SDL.h>
 
 #define VSYNC 1
@@ -189,6 +188,3 @@ extern int main(int argc, char **argv)
 
     return 0;
 }
-// #endif
-
-// #endif

@@ -6,7 +6,6 @@
 #include <stb_image.h>
 #include <cgltf.h>
 #include <vector>
-#include <HandmadeMath.h>
 
 struct Material
 {
@@ -101,7 +100,7 @@ struct Mesh
 struct Model
 {
     std::vector<Mesh> _meshes;
-    hmm_mat4          _transform;
+    glm::mat4         _transform;
     int32_t           _meshCount;
 
     void Create(const char *path)
