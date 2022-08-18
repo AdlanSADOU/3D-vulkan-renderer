@@ -23,11 +23,40 @@
 
     [solution] make blender output texture names prefixed with project name... or something
 
+
+    - how to find the root joint? :
+        the root joint is the last element in the data->nodes[] array
+
+    - each joint has a matrix called inverseBindMatrix
+        what's its purpose?
+            transforms vertices into the local space of the joint
+
+    - "each joint node may a local tranform and an array of children"
+    - "the bones of the skeleton are given implicitly, as the connections between the joints"
+
+    - JOINTS_0 & WEIGHTS_0 refer to an accessor
+        JOINTS_0 contains the indices of the joints affecting the vertex
+        WIGHTS_0 defines the weights
+        from these informations the "Skinning Matrix" can be computed
+            see "Computing the skinning matrix"
+
+    - reading:
+        - https://gamemath.com/book/multiplespaces.html
+        - https://computergraphics.stackexchange.com/questions/7603/confusion-about-how-inverse-bind-pose-is-actually-calculated-and-used#:~:text=The%20inverse%20bind%20pose%2C%20which,*%20v%2C%20which%20makes%20sense.
+        - https://www.khronos.org/opengl/wiki/Skeletal_Animation
+        - https://www.freecodecamp.org/news/advanced-opengl-animation-technique-skeletal-animations/
+
+
 */
+
+
+// https://kcoley.github.io/glTF/specification/2.0/figures/gltfOverview-2.0.0a.png
+// https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html
 #define CGLTF_IMPLEMENTATION
 #include "adgl.h"
 #include "Mesh.h"
 #include "Camera.h"
+#include <HandmadeMath.h>
 
 extern u32 WND_WIDTH;
 extern u32 WND_HEIGHT;
@@ -67,6 +96,20 @@ Entity entities[3] {};
 
 void Example3DInit()
 {
+    const char *  skeletonPath = "assets/skeleton.gltf";
+    cgltf_options opts {};
+    cgltf_data *  data {};
+    cgltf_result  res = cgltf_parse_file(&opts, skeletonPath, &data);
+    if (res == cgltf_result_success) {
+        res = cgltf_load_buffers(&opts, data, skeletonPath);
+        if (res == cgltf_result_success) {
+            SDL_Log(data->nodes[0].name);
+            SDL_Log("count: %d", data->nodes[0].parent->children_count);
+        }
+    }
+
+
+
     std::string lowPoly01       = "low_poly_01.gltf";
     std::string char05Milestone = "char_05_milestone.gltf";
 
@@ -201,6 +244,10 @@ void Example3DUpdateDraw(float dt, Input input)
     static float modelYaw   = 0;
     modelYaw += 1.f;
     entities[0].rotation.y = modelYaw;
+
+    /**
+     * draw
+     */
 
     for (size_t n = 0; n < ARR_COUNT(entities) - 1; n++) {
         for (int i = 0; i < entities[n].model._meshCount; i++) {
