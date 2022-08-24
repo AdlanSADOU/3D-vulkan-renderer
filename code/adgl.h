@@ -17,17 +17,20 @@
 
 struct Vertex
 {
-    Vector3 position;
-    Vector3 normal;
-    Vector2 texCoord;
+    glm::vec3 position;
+    glm::vec3 normal;
+    glm::vec2 texCoord;
+    glm::vec4 joints;
+    glm::vec4 weights;
 };
-
+ 
 struct VertexSOA
 {
-    Vector3 *position;
-    Vector3 *normal;
-    Vector2 *texCoord;
-    
+    glm::vec3 *position;
+    glm::vec3 *normal;
+    glm::vec2 *texCoord;
+    glm::vec4 *joints;
+    glm::vec4 *weights;
 };
 
 static void GLAPIENTRY MessageCallback(GLenum source,
@@ -45,7 +48,7 @@ static void GLAPIENTRY MessageCallback(GLenum source,
 
 #define ARR_COUNT(arr) (sizeof(arr) / sizeof(arr[0]))
 
-static void printVec(const char *name, Vector3 v)
+static void printVec(const char *name, glm::vec3 v)
 {
     SDL_Log("%s: (%f, %f, %f)\n", name, v.x, v.y, v.z);
 }
@@ -58,15 +61,15 @@ static float triangle_verts[] = {
 
 static std::vector<Vertex> cube_verts = {
     // front
-    { -1.0, -1.0, 1.0, 1.0, 1.0, 1.0, 0.0, 0.0 },
-    { 1.0, -1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.0 },
-    { 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0 },
-    { -1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.0, 1.0 },
+    { { -1.0, -1.0, 1.0 }, { 1.0, 1.0, 1.0 }, { 0.0, 0.0 } },
+    { { 1.0, -1.0, 1.0 }, { 1.0, 1.0, 1.0 }, { 1.0, 0.0 } },
+    { { 1.0, 1.0, 1.0 }, { 1.0, 1.0, 1.0 }, { 1.0, 1.0 } },
+    { { -1.0, 1.0, 1.0 }, { 1.0, 1.0, 1.0 }, { 0.0, 1.0 } },
     // back
-    { -1.0, -1.0, -1.0, 1.0, 1.0, 1.0, 0.0, 0.0 },
-    { 1.0, -1.0, -1.0, 1.0, 1.0, 1.0, 1.0, 0.0 },
-    { 1.0, 1.0, -1.0, 1.0, 1.0, 1.0, 1.0, 1.0 },
-    { -1.0, 1.0, -1.0, 1.0, 1.0, 1.0, 0.0, 1.0 }
+    { { -1.0, -1.0, -1.0 }, { 1.0, 1.0, 1.0 }, { 0.0, 0.0 } },
+    { { 1.0, -1.0, -1.0 }, { 1.0, 1.0, 1.0 }, { 1.0, 0.0 } },
+    { { 1.0, 1.0, -1.0 }, { 1.0, 1.0, 1.0 }, { 1.0, 1.0 } },
+    { { -1.0, 1.0, -1.0 }, { 1.0, 1.0, 1.0 }, { 0.0, 1.0 } }
 };
 
 static std::vector<u16> cube_indices = {

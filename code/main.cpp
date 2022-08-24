@@ -24,8 +24,8 @@ Input input = {};
 
 const uint64_t MAX_DT_SAMPLES = 1;
 
-double dt_samples[MAX_DT_SAMPLES] = {};
-double dt_averaged                = 0;
+float dt_samples[MAX_DT_SAMPLES] = {};
+float dt_averaged                = 0;
 
 
 extern int main(int argc, char **argv)
@@ -73,9 +73,6 @@ extern int main(int argc, char **argv)
     SDL_GL_GetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, &gl_version.Minor);
     SDL_Log("Initialized OpenGL context %d.%d Core Profile", gl_version.Major, gl_version.Minor);
 
-    glEnable(GL_BLEND);
-    glEnable(GL_DEPTH_TEST);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
 
     // ExampleSPriteInit();
@@ -155,13 +152,13 @@ extern int main(int argc, char **argv)
             }
         }
 
-        static double acc = 0;
+        static float acc = 0;
         if ((acc += dt_averaged) > 1) {
             SDL_SetWindowTitle(window, std::to_string(1 / dt_averaged).c_str());
             acc = 0;
         }
 
-        glClearColor(.2f, .2f, .2f, 1.f);
+        glClearColor(.1f, .1f, .1f, 1.f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         // ExampleSpriteUpdateDraw(dt_averaged, input);
@@ -173,9 +170,9 @@ extern int main(int argc, char **argv)
         uint64_t end = SDL_GetPerformanceCounter();
 
         static uint64_t idx                = 0;
-        dt_samples[idx++ % MAX_DT_SAMPLES] = (end - start) / (double)SDL_GetPerformanceFrequency();
+        dt_samples[idx++ % MAX_DT_SAMPLES] = (end - start) / (float)SDL_GetPerformanceFrequency();
 
-        double sum = 0;
+        float sum = 0;
         for (uint64_t i = 0; i < MAX_DT_SAMPLES; i++) {
             sum += dt_samples[i];
         }

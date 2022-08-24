@@ -25,3 +25,18 @@
 *.exe
 *.out
 *.app
+
+# visual studio
+*.suo
+*.db
+*.sqlite
+*.ipch
+.vs/VSWorkspaceState.json
+.vs/opengl-ex/project-colors.json
+.vs/opengl-ex/v17/workspaceFileList.bin
+build/.vs/ProjectSettings.json
+build/.vs/VSWorkspaceState.json
+build/.vs/build/project-colors.json
+.vs/ProjectSettings.json
+
+.vs/

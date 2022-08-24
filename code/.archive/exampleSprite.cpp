@@ -63,17 +63,17 @@ Matrix4 quad_transform;
 Vector2 quad_pos = {};
 
 
-static Texture texture;
+static Texture *texture;
 
 void ExampleSPriteInit()
 {
 
-    vert_shader.CreateAndCompile("./shaders/vertexShader.vert", GL_VERTEX_SHADER);
-    frag_shader.CreateAndCompile("./shaders/fragmentShader.frag", GL_FRAGMENT_SHADER);
-    default_shader_program.AddShader(&vert_shader);
-    default_shader_program.AddShader(&frag_shader);
+    vert_shader.ShaderSourceLoadAndCompile("./shaders/vertexShader.vert", GL_VERTEX_SHADER);
+    frag_shader.ShaderSourceLoadAndCompile("./shaders/fragmentShader.frag", GL_FRAGMENT_SHADER);
+    default_shader_program.AddShader(vert_shader);
+    default_shader_program.AddShader(frag_shader);
     default_shader_program.CreateAndLinkProgram();
-    default_shader_program.UseProgram();
+    default_shader_program.ShaderUse();
 
     GLint vPos_attrib_location      = 0;
     GLint vColor_attrib_location    = 1;
@@ -84,7 +84,7 @@ void ExampleSPriteInit()
     //////////////////////////////////////
     /// Texture
 
-    texture.Create("assets/powerup.png");
+    texture = TextureCreate("assets/powerup.png");
 
 
 
@@ -131,7 +131,7 @@ void ExampleSPriteInit()
     // projection = Matrix4(1.0f);
     // projection = glm::perspective(45.f, (float)(WND_WIDTH / WND_HEIGHT), .1f, 100.f);
 
-    // default_shader_program.SetUniformMatrix4Name("model", quad_transform);
+    // default_shader_program.ShaderSetMat4ByName("model", quad_transform);
 }
 
 
@@ -139,12 +139,12 @@ void ExampleSPriteInit()
 
 void ExampleSpriteUpdateDraw(float dt, Input input)
 {
-    default_shader_program.UseProgram();
+    default_shader_program.ShaderUse();
 
     projection = glm::ortho(0.f, (float)WND_WIDTH, 0.f, (float)WND_HEIGHT, .1f, 10.f);
     view       = glm::lookAt(glm::vec3(0.f, 0.f, 2.0f), glm::vec3(0.f, 0.f, 0.f), glm::vec3(0.0f, 1.0f, 0.0f));
-    default_shader_program.SetUniformMatrix4Name("view", view);
-    default_shader_program.SetUniformMatrix4Name("projection", projection);
+    default_shader_program.ShaderSetMat4ByName("view", view);
+    default_shader_program.ShaderSetMat4ByName("projection", projection);
 
 
     static float theta = 0;
@@ -159,14 +159,14 @@ void ExampleSpriteUpdateDraw(float dt, Input input)
     {
         Matrix4 model = Identity();
 
-        model = model * Scale({ (float)texture.tex_width, (float)texture.tex_height, 1.0f })
+        model = model * Scale({ (float)texture->width, (float)texture->height, 1.0f })
             * RotateZ(Radians(theta))
             * Translate({ quad_pos.x += x, quad_pos.y += y, 0.f });
-        default_shader_program.SetUniformMatrix4Name("model", model);
+        default_shader_program.ShaderSetMat4ByName("model", model);
     }
 
     {
-        glBindTexture(GL_TEXTURE_2D, texture.id);
+        glBindTexture(GL_TEXTURE_2D, texture->id);
         glBindVertexArray(vao_quad);
         glDrawElements(GL_TRIANGLES, sizeof(Quad::indices) / sizeof(Quad::indices[0]), GL_UNSIGNED_INT, 0);
     }

@@ -309,7 +309,6 @@ static Matrix4 Perspective(float zNear, float zFar, float fovy, float aspect)
     };
 }
 
-
 static Matrix4 LookAt(Vector3 eye, Vector3 at, Vector3 up)
 {
     Vector3 d = Vector3::Normalize(eye - at);

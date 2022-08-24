@@ -50,19 +50,19 @@ void InitSpaceShooter()
 
 
 
-    vertexShader.CreateAndCompile("shaders/spaceShooter.vert", GL_VERTEX_SHADER);
-    fragmentShader.CreateAndCompile("shaders/spaceShooter.frag", GL_FRAGMENT_SHADER);
-    shaderProg.AddShader(&vertexShader);
-    shaderProg.AddShader(&fragmentShader);
+    vertexShader.ShaderSourceLoadAndCompile("shaders/spaceShooter.vert", GL_VERTEX_SHADER);
+    fragmentShader.ShaderSourceLoadAndCompile("shaders/spaceShooter.frag", GL_FRAGMENT_SHADER);
+    shaderProg.AddShader(vertexShader);
+    shaderProg.AddShader(fragmentShader);
     if (!shaderProg.CreateAndLinkProgram()) SDL_Log("Shader Prog failed...");
-    shaderProg.UseProgram();
+    shaderProg.ShaderUse();
 
 
 
 
 
     Matrix4 projection = Perspective(.01f, 100.f, 40.f, aspect);
-    shaderProg.SetUniformMatrix4Name("projection", projection);
+    shaderProg.ShaderSetMat4ByName("projection", projection);
 
 
     entities[0].position     = { 0, 0, 0 };
@@ -109,7 +109,7 @@ void UpdateDrawSpaceShooter(float dt, Input input)
 
 
 
-    shaderProg.UseProgram();
+    shaderProg.ShaderUse();
 
     Vector3 forward;
     forward.x = cosf(Radians(yaw));
@@ -129,17 +129,17 @@ void UpdateDrawSpaceShooter(float dt, Input input)
         entities[0].position -= right.Normalized() * dt * playerSpeed;
 
     Matrix4 view = LookAt(entities[0].position + forward.Normalized() * 10, entities[0].position + Vector3(0, 0, 0), { 0, 1, 0 });
-    shaderProg.SetUniformMatrix4Name("view", view);
+    shaderProg.ShaderSetMat4ByName("view", view);
 
     glBindVertexArray(triangle.VAO);
 
     Matrix4 model = entities[0].localToWorld * RotateY(Radians(yaw) - PI / 2) * Translate(entities[0].position);
-    shaderProg.SetUniformMatrix4Name("model", model);
+    shaderProg.ShaderSetMat4ByName("model", model);
     glDrawArrays(GL_LINE_LOOP, 0, 3);
 
     for (size_t i = 1; i < MAX_ENTITIES; i++) {
         Matrix4 model = entities[i].localToWorld * Translate(entities[i].position);
-        shaderProg.SetUniformMatrix4Name("model", model);
+        shaderProg.ShaderSetMat4ByName("model", model);
         glDrawArrays(GL_LINE_LOOP, 0, 3);
     }
 }

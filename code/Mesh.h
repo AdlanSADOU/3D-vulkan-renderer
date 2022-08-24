@@ -9,59 +9,64 @@
 
 struct Material
 {
-    Shader        _vertexShader;
-    Shader        _fragmentShader;
-    ShaderProgram _program;
-    // todo: we might want multiple textures
-    Texture *_texture;
+    Shader *_shader {};
 
-    void Create(const char *vertexShaderPath, const char *fragmentShaderPath, Texture *texture)
-    {
-        _texture = texture;
-        _vertexShader.CreateAndCompile(vertexShaderPath, GL_VERTEX_SHADER);
-        _fragmentShader.CreateAndCompile(fragmentShaderPath, GL_FRAGMENT_SHADER);
-        _program.AddShader(&_vertexShader);
-        _program.AddShader(&_fragmentShader);
-
-        if (!_program.CreateAndLinkProgram()) {
-            SDL_Log("shader prog failed\n");
-            exit(1);
-        }
-    }
+    // todo(ad): we might want multiple textures
+    Texture *_texture {};
 };
+
+static Material *MaterialCreate(const char *vertexShaderPath, const char *fragmentShaderPath, Texture *texture)
+{
+    Material *m = (Material *)malloc(sizeof(Material));
+
+    m->_texture = texture;
+    if (!(m->_shader = CreateAndLinkProgram(vertexShaderPath, fragmentShaderPath))) {
+        SDL_Log("shader prog failed\n");
+        free(m);
+        return NULL;
+    }
+
+    return m;
+}
+
+struct MeshSOA
+{
+    Vertex **_submeshVertices;
+};
+
 
 struct Mesh
 {
-    std::vector<std::vector<Vertex>>   submeshVertices;
-    std::vector<std::vector<uint16_t>> submeshIndices;
-    std::vector<std::vector<Texture>>  subTextures;
+    std::vector<std::vector<Vertex>>   _submeshVertices;
+    std::vector<std::vector<uint16_t>> _submeshIndices;
+    std::vector<std::vector<Texture>>  _subTextures;
 
-    std::vector<uint32_t> VAOs;
-    std::vector<uint32_t> VBOs;
-    std::vector<uint32_t> IBOs;
+    std::vector<uint32_t> _VAOs;
+    std::vector<uint32_t> _VBOs;
+    std::vector<uint32_t> _IBOs;
 
-    int32_t submeshCount;
+    int32_t _submeshCount;
 
-    std::vector<Material *> submeshMaterials;
+    std::vector<Material *> _submeshMaterials;
 
     void Create()
     {
-        VAOs.resize(submeshCount);
-        VBOs.resize(submeshCount);
-        IBOs.resize(submeshCount);
+        _VAOs.resize(_submeshCount);
+        _VBOs.resize(_submeshCount);
+        _IBOs.resize(_submeshCount);
 
-        for (size_t i = 0; i < submeshVertices.size(); i++) {
+        for (size_t i = 0; i < _submeshVertices.size(); i++) {
 
-            glGenVertexArrays(1, &VAOs[i]);
-            glBindVertexArray(VAOs[i]);
+            glGenVertexArrays(1, &_VAOs[i]);
+            glBindVertexArray(_VAOs[i]);
 
-            glGenBuffers(1, &VBOs[i]);
-            glBindBuffer(GL_ARRAY_BUFFER, VBOs[i]);
-            glBufferData(GL_ARRAY_BUFFER, submeshVertices[i].size() * sizeof(Vertex) /*bytes*/, submeshVertices[i].data(), GL_DYNAMIC_DRAW);
+            glGenBuffers(1, &_VBOs[i]);
+            glBindBuffer(GL_ARRAY_BUFFER, _VBOs[i]);
+            glBufferData(GL_ARRAY_BUFFER, _submeshVertices[i].size() * sizeof(Vertex) /*bytes*/, _submeshVertices[i].data(), GL_DYNAMIC_DRAW);
 
-            glGenBuffers(1, &IBOs[i]);
-            glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, IBOs[i]);
-            glBufferData(GL_ELEMENT_ARRAY_BUFFER, submeshIndices[i].size() * sizeof(uint16_t) /*bytes*/, submeshIndices[i].data(), GL_DYNAMIC_DRAW);
+            glGenBuffers(1, &_IBOs[i]);
+            glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, _IBOs[i]);
+            glBufferData(GL_ELEMENT_ARRAY_BUFFER, _submeshIndices[i].size() * sizeof(uint16_t) /*bytes*/, _submeshIndices[i].data(), GL_DYNAMIC_DRAW);
 
             glEnableVertexAttribArray(0);
             glVertexAttribPointer(
@@ -125,10 +130,10 @@ struct Model
         for (size_t i = 0; i < data->meshes_count; i++) {
             uint32_t primitivesCount = data->meshes[i].primitives_count;
 
-            _meshes[i].submeshVertices.resize(primitivesCount);
-            _meshes[i].submeshIndices.resize(primitivesCount);
-            _meshes[i].submeshCount = primitivesCount;
-            _meshes[i].submeshMaterials.resize(primitivesCount);
+            _meshes[i]._submeshVertices.resize(primitivesCount);
+            _meshes[i]._submeshIndices.resize(primitivesCount);
+            _meshes[i]._submeshCount = primitivesCount;
+            _meshes[i]._submeshMaterials.resize(primitivesCount);
 
             for (size_t j = 0; j < primitivesCount; j++) {
                 {
@@ -139,16 +144,16 @@ struct Model
 
                     for (size_t a = 0; a < data->meshes[i].primitives[j].attributes[i].data->count; a++) {
                         Vertex vert;
-                        vert.position = ((Vector3 *)(((char *)positions->buffer->data) + positions->offset))[a];
-                        vert.normal   = ((Vector3 *)(((char *)normals->buffer->data) + normals->offset))[a];
-                        vert.texCoord = ((Vector2 *)(((char *)texCoords->buffer->data) + texCoords->offset))[a];
-                        _meshes[i].submeshVertices[j].push_back(vert);
+                        vert.position = ((glm::vec3 *)(((char *)positions->buffer->data) + positions->offset))[a];
+                        vert.normal   = ((glm::vec3 *)(((char *)normals->buffer->data) + normals->offset))[a];
+                        vert.texCoord = ((glm::vec2 *)(((char *)texCoords->buffer->data) + texCoords->offset))[a];
+                        _meshes[i]._submeshVertices[j].push_back(vert);
                     }
                 }
 
                 cgltf_buffer_view *indices_view = data->meshes[i].primitives[j].indices->buffer_view;
                 for (size_t b = 0; b < data->meshes[i].primitives[j].indices->count; b++) {
-                    _meshes[i].submeshIndices[j].push_back(((uint16_t *)((char *)indices_view->buffer->data + indices_view->offset))[b]);
+                    _meshes[i]._submeshIndices[j].push_back(((uint16_t *)((char *)indices_view->buffer->data + indices_view->offset))[b]);
                 }
             }
 

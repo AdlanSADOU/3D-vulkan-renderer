@@ -61,6 +61,7 @@
         "xtree": "cpp",
         "bit": "cpp",
         "clocale": "cpp",
-        "map": "cpp"
+        "map": "cpp",
+        "*.cppp": "cpp"
     }
 }

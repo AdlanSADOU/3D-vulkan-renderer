@@ -8,6 +8,8 @@
 #include <sstream>
 #include <string>
 #include <vector>
+#include <stdio.h>
+#include <stdlib.h>
 
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
@@ -19,129 +21,128 @@
 
 struct Shader
 {
-    const char * m_sourcePath = 0;
-    unsigned int m_ID         = 0;
-    std::string  m_source     = {};
+    uint32_t programID    = {};
+    uint32_t vertShaderID = {};
+    uint32_t fragShaderID = {};
+    char *   vertShaderPath {};
+    char *   fragShaderPath {};
+};
 
-    unsigned int CreateAndCompile(const char *sourcePath, GLenum TYPE)
-    {
-        m_sourcePath = sourcePath;
+static void ShaderDestroy(Shader *shader)
+{
+    free(shader->fragShaderPath);
+    free(shader->vertShaderPath);
+    free(shader);
+}
 
-        std::ifstream shaderFile;
-        shaderFile.open(sourcePath);
+static uint32_t ShaderSourceLoadAndCompile(const char *sourcePath, GLenum TYPE)
+{
+    uint32_t ID = -1;
 
-        std::stringstream fileStream;
+    FILE *f = fopen(sourcePath, "rb");
+    fseek(f, 0, SEEK_END);
+    long fsize = ftell(f);
+    fseek(f, 0, SEEK_SET);
 
-        fileStream << shaderFile.rdbuf();
-        shaderFile.close();
+    char *sourceCode = (char *)malloc(fsize + 1);
+    fread(sourceCode, fsize, 1, f);
+    fclose(f);
 
-        m_source = fileStream.str();
-        if (shaderFile.fail()) {
-            SDL_Log("%s : Failed to load\n", sourcePath);
-            return 0;
-        }
-
-        const GLchar *shaderSource = m_source.c_str();
-        SDL_Log("Loaded shader: %s\n", sourcePath);
+    sourceCode[fsize] = 0;
 
 #if LOG_SHADER_SOURCE
-        SDL_Log(shaderSource);
+    SDL_Log(sourceCode);
 #endif
 
-        m_ID = glCreateShader(TYPE);
-        glShaderSource(m_ID, 1, &shaderSource, NULL);
-        glCompileShader(m_ID);
+    ID = glCreateShader(TYPE);
+    glShaderSource(ID, 1, &sourceCode, NULL);
+    glCompileShader(ID);
 
-        int  success;
-        char infoLog[512];
-        glGetShaderiv(m_ID, GL_COMPILE_STATUS, &success);
-        if (!success) {
-            glGetShaderInfoLog(m_ID, 512, NULL, infoLog);
-            SDL_Log("%s : Failed shader compilation: %s\n", m_sourcePath, infoLog);
-            return 0;
-        }
+    int  success;
+    char infoLog[512];
+    glGetShaderiv(ID, GL_COMPILE_STATUS, &success);
+    if (!success) {
+        glGetShaderInfoLog(ID, 512, NULL, infoLog);
+        SDL_Log("%s : Failed shader compilation: %s\n", sourcePath, infoLog);
+        return ID;
+    }
 
-        return m_ID;
-    };
-};
-
+    return ID;
+}
 
 
-
-
-struct ShaderProgram
+static Shader *CreateAndLinkProgram(const char *vertShaderPath, const char *fragShaderPath)
 {
-    unsigned int          _programId = 0;
-    std::vector<Shader *> _shaders   = {};
+    int     success = 0;
+    char    infoLog[512];
+    Shader *s {};
 
-    void AddShader(Shader *shader)
-    {
-        _shaders.push_back(shader);
+    uint32_t vertShaderID = ShaderSourceLoadAndCompile(vertShaderPath, GL_VERTEX_SHADER);
+    uint32_t fragShaderID = ShaderSourceLoadAndCompile(fragShaderPath, GL_FRAGMENT_SHADER);
+
+    if (vertShaderID && fragShaderID)
+        s = (Shader *)malloc(sizeof(Shader));
+
+    s->programID = glCreateProgram();
+
+    glAttachShader(s->programID, vertShaderID);
+    glAttachShader(s->programID, fragShaderID);
+
+    glLinkProgram(s->programID);
+
+    glGetProgramiv(s->programID, GL_LINK_STATUS, &success);
+    if (!success) {
+        glGetProgramInfoLog(s->programID, 512, NULL, infoLog);
+        SDL_Log("%s : Failed to link shaders: %s\n", infoLog);
+        free(s);
+        return NULL;
     }
 
-    bool CreateAndLinkProgram()
-    {
-        int  success = 0;
-        char infoLog[512];
-
-        _programId = glCreateProgram();
-
-        for (auto shader : _shaders) {
-            glAttachShader(_programId, shader->m_ID);
-        }
-
-        glLinkProgram(_programId);
-
-        glGetProgramiv(_programId, GL_LINK_STATUS, &success);
-        if (!success) {
-            glGetProgramInfoLog(_programId, 512, NULL, infoLog);
-            SDL_Log("%s : Failed to link shaders: %s\n", infoLog);
-            return 0;
-        }
-
-        glGetProgramiv(_programId, GL_LINK_STATUS, &success);
-        if (!success) {
-            glGetProgramInfoLog(_programId, 512, NULL, infoLog);
-            SDL_Log("%s : Failed to link shaders: %s\n", infoLog);
-            return 0;
-        }
-        SDL_Log("Shader link done");
-        return 1;
+    glGetProgramiv(s->programID, GL_LINK_STATUS, &success);
+    if (!success) {
+        glGetProgramInfoLog(s->programID, 512, NULL, infoLog);
+        SDL_Log("%s : Failed to link shaders: %s\n", infoLog);
+        free(s);
+        return NULL;
     }
+    SDL_Log("Shader link done");
 
-    void UseProgram()
-    {
-        glUseProgram(_programId);
-    }
+    return s;
+}
 
-    void UnuseProgram()
-    {
-        glUseProgram(0);
-    }
+void ShaderUse(uint32_t programID)
+{
+    glUseProgram(programID);
+}
 
-    void setBool(const std::string &name, bool value) const;
-    void setInt(const std::string &name, int value) const;
-    void setFloat(const std::string &name, float value) const
-    {
-    }
+void UnuseProgram()
+{
+    glUseProgram(0);
+}
 
-    GLint GetUniformLocation(const char *name)
-    {
-        return glGetUniformLocation(_programId, name);
-    }
+void setBool(const std::string &name, bool value);
+void setInt(const std::string &name, int value);
+void setFloat(const std::string &name, float value)
+{
+}
 
-    void SetUniformMatrix4Name(const char *name, glm::mat4 matrix)
-    {
-        GLint location = GetUniformLocation(name);
-        glUniformMatrix4fv(location, 1, GL_FALSE, glm::value_ptr(matrix));
-    }
+static GLint GetUniformLocation(const char *name, uint32_t programID)
+{
+    return glGetUniformLocation(programID, name);
+}
 
-    void SetUniformMatrix4Name(const char *name, const Matrix4 matrix)
-    {
-        // we could just hardcode locations to avoid querrying for names each frame..
-        GLint location = GetUniformLocation(name);
-        glUniformMatrix4fv(location, 1, GL_FALSE, matrix.m);
-    }
-};
+void ShaderSetMat4ByName(const char *name, glm::mat4 matrix, uint32_t programID)
+{
+    GLint location = GetUniformLocation(name, programID);
+    glUniformMatrix4fv(location, 1, GL_FALSE, glm::value_ptr(matrix));
+}
+
+void SetUniformMatrix4Name(const char *name, const Matrix4 matrix, uint32_t programID)
+{
+    // we could just hardcode locations to avoid querrying for names each frame..
+    GLint location = GetUniformLocation(name, programID);
+    glUniformMatrix4fv(location, 1, GL_FALSE, matrix.m);
+}
+
 
 #endif // SHADER_H

@@ -1,7 +1,9 @@
+JointMatrices[j] = inverse(globalTransform) * globalJointTransforms[j] * inverseBindMatrices[j]
+
+--
+
 https://www.khronos.org/registry/OpenGL/extensions/KHR/KHR_debug.txt
 
-so I want to draw a triangle
-and be able to move it
 
 VAO
 VBO
@@ -22,7 +24,7 @@ is going to look like;
 
 ## Maths
 The dot product between two (three-component) vectors returns a
-scalar (just one value) that is the cosine of the angle between the two vectors scaled by
+scalar that is the cosine of the angle between the two vectors scaled by
 the product of their lengths.
 
 dot(A, B) = cos(ANGLE_BETWEEN_A_B)
