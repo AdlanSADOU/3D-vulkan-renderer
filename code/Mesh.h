@@ -15,12 +15,12 @@ struct Material
     Texture *_texture {};
 };
 
-static Material *MaterialCreate(const char *vertexShaderPath, const char *fragmentShaderPath, Texture *texture)
+static Material *MaterialCreate(const char*shaderPath, Texture *texture)
 {
     Material *m = (Material *)malloc(sizeof(Material));
 
     m->_texture = texture;
-    if (!(m->_shader = CreateAndLinkProgram(vertexShaderPath, fragmentShaderPath))) {
+    if (!(m->_shader = LoadShader(shaderPath))) {
         SDL_Log("shader prog failed\n");
         free(m);
         return NULL;

@@ -58,16 +58,22 @@
 // https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html
 #define CGLTF_IMPLEMENTATION
 #include "adgl.h"
+
+// todo: here we've included Mesh.h before Animation.h because Mesh.h
+// includes cgltf.h. if we also include it in Animtion.h then compiler
+// complains about multiple cgltf includes
+// we might want to centralise all code that deals with cgltf in a single source file
 #include "Mesh.h"
+#include "Animation.h"
+
 #include "Camera.h"
 #include <vector>
 #include <unordered_map>
 
+// todo(ad): should these be provided as globals?
+// how should we deal with general window parameters?
 extern u32 WND_WIDTH;
 extern u32 WND_HEIGHT;
-
-static GLuint texture;
-static int    tex_width, tex_height, nrChannels;
 
 static Camera camera = {};
 
@@ -77,48 +83,6 @@ static Camera camera = {};
 */
 std::unordered_map<std::string, Texture *>  gTextures;
 std::unordered_map<std::string, Material *> gMaterials;
-
-// static Model    milechar;
-static Material *mileMaterial_1;
-static Material *mileMaterial_2;
-static Material *mileMaterial_3;
-static Material *cubeMaterial;
-static Material *chibiMaterial;
-
-static const char *standardShaderPath = "./shaders/standard.vert";
-static const char *fragmentShaderPath = "./shaders/standard.frag";
-
-struct Joint
-{
-    char *    name;
-    int8_t    parent;
-    glm::mat4 invBindPose;
-} * joints;
-
-struct Skeleton
-{
-    uint32_t id;
-    uint32_t jointCount;
-    Joint *  joints;
-};
-
-struct AnimationPose
-{
-    float     scale;
-    glm::quat rotation;
-    glm::vec3 translation;
-};
-
-/**
- * Is a pose sample actually an offset relative to
- * the rest pose or an offset relative to the previous pose...?
- */
-struct AnimationClip
-{
-    uint32_t      id;
-    float         duration;
-    AnimationPose poseSamples;
-};
 
 struct Ground
 {
@@ -150,6 +114,9 @@ Point point {};
 
 void Example3DInit()
 {
+    CameraCreate(&camera, { 0, 5, 16 }, 45.f, WND_WIDTH / (float)WND_HEIGHT, .8f, 1000.f);
+    gCameraInUse = &camera;
+
     gTextures.insert({ "brick_wall", TextureCreate("assets/brick_wall.jpg") });
     gTextures.insert({ "cs_blend_red Base Color", TextureCreate("assets/cs_blend_red Base Color.png") });
     gTextures.insert({ "ground", TextureCreate("assets/ground.jpg") });
@@ -159,66 +126,15 @@ void Example3DInit()
     gTextures.insert({ "Material", TextureCreate("assets/Material.png") });
 
 
-    gMaterials.insert({ "standard", MaterialCreate("shaders/point.vert", "shaders/point.frag", NULL) });
-    gMaterials.insert({ "mileMaterial", MaterialCreate(standardShaderPath, fragmentShaderPath, gTextures["brick_wall"]) });
-    gMaterials.insert({ "cubeMaterial", MaterialCreate(standardShaderPath, fragmentShaderPath, gTextures["cube"]) });
-    gMaterials.insert({ "chibiMaterial", MaterialCreate(standardShaderPath, fragmentShaderPath, gTextures["cs_blend_red Base Color"]) });
-    gMaterials.insert({ "groundMaterial", MaterialCreate("shaders/ground.vert", "shaders/ground.frag", gTextures["ground"]) });
+    gMaterials.insert({ "standard", MaterialCreate("shaders/point.shader", NULL) });
+    gMaterials.insert({ "mileMaterial", MaterialCreate("shaders/standard.shader", gTextures["brick_wall"]) });
+    gMaterials.insert({ "cubeMaterial", MaterialCreate("shaders/standard.shader", gTextures["cube"]) });
+    gMaterials.insert({ "chibiMaterial", MaterialCreate("shaders/standard.shader", gTextures["cs_blend_red Base Color"]) });
+    gMaterials.insert({ "groundMaterial", MaterialCreate("shaders/ground.shader", gTextures["ground"]) });
 
 
-    const char *  skeletonPath = "assets/skinned_cube.gltf";
-    cgltf_options opts {};
-    cgltf_data *  data {};
-    cgltf_result  res = cgltf_parse_file(&opts, skeletonPath, &data);
-    if (res == cgltf_result_success) {
-        res = cgltf_load_buffers(&opts, data, skeletonPath);
-        if (res == cgltf_result_success) {
-            SDL_Log(data->nodes[0].name);
-            SDL_Log("count: %d", data->nodes[0].parent->children_count);
 
-            SDL_Log("%s", data->meshes[0].primitives[0].attributes[3].name);
-            // SDL_Log("%d", data->meshes[0].primitives[0].attributes[3].data->buffer_view->);
-
-            // what does "count" mean for JOINTS_0 data ?
-            // SDL_Log("%d", data->meshes[0].primitives[0].attributes[3].data->count);
-
-            // Attribute type
-            // SDL_Log("skin: %d", data->meshes[0].primitives[0].attributes[3].type == cgltf_attribute_type_joints);
-        }
-    }
-
-    // joints.push_back({(char *)"root", 0, glm::vec3(0,0,0), glm::quat(0,0,0,1), glm::vec3(1,1,1), glm::mat4(1), glm::mat4(1)});
-    // joints.push_back({(char *)"bone_1", 0, glm::vec3(0,0,0), glm::quat(0,0,0,1), glm::vec3(1,1,1), glm::mat4(1), glm::mat4(1)});
-    // joints.push_back({(char *)"bone_2", 0, glm::vec3(0,0,0), glm::quat(0,0,0,1), glm::vec3(1,1,1), glm::mat4(1), glm::mat4(1)});
-    // joints.push_back({(char *)"bone_3", 0, glm::vec3(0,0,0), glm::quat(0,0,0,1), glm::vec3(1,1,1), glm::mat4(1), glm::mat4(1)});
-
-    /**
-     * - tree or array?
-     * - generate joint local matrices
-     * - generate joint global matrices
-     */
-
-    cgltf_skin   skin       = data->skins[0];
-    cgltf_node **jointNodes = skin.joints;
-
-
-    joints    = (Joint *)malloc(sizeof(Joint) * 3);
-    joints[0] = {
-        .name        = strdup("root"),
-        .parent      = -1,
-        .invBindPose = glm::mat4(1)
-    };
-
-    // joints[0].invBindPose = glm::translate(joints[0].invBindPose, 0.f, 0.f, 0.f);
-
-
-    // for (size_t i = 0; i < skin.joints_count; i++) {
-    //     SDL_Log("Ours: %s: 0%x", joints[i]->name, joints[i]);
-    //     // for (size_t j = 0; j < joints[i]->childCount; j++) {
-    //     //     SDL_Log("   child[%d]:  %s: 0%x", j, joints[i]->children[j]->name, joints[i]->children[j]);
-    //     // }
-    // }
-
+    PrintAnimationClipTransforms();
 
 
     std::string lowPoly01       = "low_poly_01.gltf";
@@ -234,11 +150,6 @@ void Example3DInit()
     entities[0].position                              = { 0.f, 0.f, -6.f };
     entities[0].rotation                              = { 0.f, 0.f, 0.f };
     entities[0].scale                                 = { .05, .05, .05 };
-
-    // cubeMesh.submeshCount = 1;
-    // cubeMesh.submeshVertices.push_back(cube_verts);
-    // cubeMesh.submeshIndices.push_back(cube_indices);
-    // cubeMesh.Create();
 
     entities[1].model.Create("assets/skinned_cube.gltf");
     entities[1].model._meshes[0]._submeshMaterials[0] = gMaterials["cubeMaterial"];
@@ -256,17 +167,12 @@ void Example3DInit()
     entities[2].rotation         = { 0.f, 0.f, 0.f };
     entities[2].scale            = { 0.05f, 0.05f, 0.05f };
 
-    camera.position = { 0, 5, 16 };
-    camera.forward  = { 0, 0, -1 };
-    camera.up       = { 0, 1, 0 };
-    camera.yaw      = -90;
-    camera.pitch    = 0;
 
     ground.material = gMaterials["groundMaterial"];
     glGenVertexArrays(1, &ground.VAO);
 
     point = {
-        .position = { -0.5f, -0.5f, -0.5f },
+        .position = { 0.f, 0.f, 0.f },
         .material = gMaterials["standard"]
     };
 
@@ -283,17 +189,23 @@ void Example3DInit()
 
 float speed       = 20.f;
 float sensitivity = 0.46f;
-float fov         = 45;
 
-void DrawPoint(glm::vec3 p, glm::vec4 color)
+void DrawPoint(Point &p, glm::vec4 color)
 {
-    // glBindVertexArray()
+    ShaderUse(p.material->_shader->programID);
+    glm::mat4 model = glm::mat4(1);
+    model           = glm::translate(model, { 1, 1, 1 });
+    ShaderSetMat4ByName("projection", gCameraInUse->projection, p.material->_shader->programID);
+    ShaderSetMat4ByName("view", gCameraInUse->view, p.material->_shader->programID);
+    ShaderSetMat4ByName("model", model, p.material->_shader->programID);
+    glEnable(GL_PROGRAM_POINT_SIZE);
+    glPointSize(60.f);
+    glBindVertexArray(p.VAO);
     glDrawArrays(GL_POINTS, 0, 1);
 }
 
 void Example3DUpdateDraw(float dt, Input input)
 {
-
     glm::vec3 directionDelta { 0, 0, 0 };
 
 #if 0
@@ -360,11 +272,9 @@ void Example3DUpdateDraw(float dt, Input input)
     xrelPrev         = xrel;
     yrelPrev         = yrel;
 
-
-    glm::vec3    at         = camera.position + camera.forward;
-    glm::mat4    projection = glm::perspective((fov), (float)WND_WIDTH / (float)WND_HEIGHT, .1f, 1000.f);
-    glm::mat4    view       = glm::lookAt(camera.position, at, camera.up);
-    static float modelYaw   = 0;
+    gCameraInUse->aspect = WND_WIDTH / (float)WND_HEIGHT;
+    CameraUpdate();
+    static float modelYaw = 0;
     modelYaw += 1.f;
     entities[0].rotation.y = modelYaw;
 
@@ -380,14 +290,13 @@ void Example3DUpdateDraw(float dt, Input input)
     glEnable(GL_DEPTH_TEST);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-
-
     // todo(): simplify to ShaderUse(material->_shader)
 
+    DrawPoint(point, { 1, 1, 1, .1f });
 
     ShaderUse(ground.material->_shader->programID);
-    ShaderSetMat4ByName("proj", projection, ground.material->_shader->programID);
-    ShaderSetMat4ByName("view", view, ground.material->_shader->programID);
+    ShaderSetMat4ByName("proj", gCameraInUse->projection, ground.material->_shader->programID);
+    ShaderSetMat4ByName("view", gCameraInUse->view, ground.material->_shader->programID);
     glBindTexture(GL_TEXTURE_2D, ground.material->_texture->id);
     glBindVertexArray(ground.VAO);
     glDrawArrays(GL_TRIANGLES, 0, 6);
@@ -408,8 +317,8 @@ void Example3DUpdateDraw(float dt, Input input)
             for (int j = 0; j < entities[n].model._meshes[i]._submeshCount; j++) {
                 Material *material = entities[n].model._meshes[i]._submeshMaterials[j];
                 ShaderUse(material->_shader->programID);
-                ShaderSetMat4ByName("projection", projection, material->_shader->programID);
-                ShaderSetMat4ByName("view", view, material->_shader->programID);
+                ShaderSetMat4ByName("projection", gCameraInUse->projection, material->_shader->programID);
+                ShaderSetMat4ByName("view", gCameraInUse->view, material->_shader->programID);
                 ShaderSetMat4ByName("model", model, material->_shader->programID);
                 glBindTexture(GL_TEXTURE_2D, material->_texture->id);
 
@@ -420,16 +329,4 @@ void Example3DUpdateDraw(float dt, Input input)
             }
         }
     }
-
-
-    ShaderUse(point.material->_shader->programID);
-    glm::mat4 model = glm::mat4(1);
-    model           = glm::translate(model, { 1, 1, 1 });
-    ShaderSetMat4ByName("projection", projection, point.material->_shader->programID);
-    ShaderSetMat4ByName("view", view, point.material->_shader->programID);
-    ShaderSetMat4ByName("model", model, point.material->_shader->programID);
-    glEnable(GL_PROGRAM_POINT_SIZE);
-    glPointSize(6.f);
-    glBindVertexArray(point.VAO);
-    glDrawArrays(GL_POINTS, 0, 1);
 }

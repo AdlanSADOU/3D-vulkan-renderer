@@ -27,7 +27,8 @@ const uint64_t MAX_DT_SAMPLES = 1;
 float dt_samples[MAX_DT_SAMPLES] = {};
 float dt_averaged                = 0;
 
-
+// note(ad): if we want to make this into a "framework"
+// we must provide init and shutdown
 extern int main(int argc, char **argv)
 {
     if (SDL_Init(SDL_INIT_EVERYTHING)) {
@@ -140,6 +141,8 @@ extern int main(int argc, char **argv)
                             int w, h;
                             SDL_GL_GetDrawableSize(window, &w, &h);
                             glViewport(0, 0, w, h);
+                            WND_WIDTH = w;
+                            WND_HEIGHT = h;
                             break;
 
                         default:
