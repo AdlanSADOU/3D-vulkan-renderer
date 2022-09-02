@@ -1,7 +1,5 @@
 #pragma once
 
-#include "adgl.h"
-
 struct Texture
 {
     GLuint id;

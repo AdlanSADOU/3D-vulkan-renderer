@@ -15,8 +15,8 @@ struct GLVersion
     int Minor;
 } gl_version;
 
-u32 WND_WIDTH  = 1200;
-u32 WND_HEIGHT = 800;
+uint32_t WND_WIDTH  = 1200;
+uint32_t WND_HEIGHT = 800;
 
 bool g_running = true;
 

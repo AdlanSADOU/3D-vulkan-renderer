@@ -1,19 +1,22 @@
 #if !defined(ADGL_H)
 #define ADGL_H
 
-#include "mymath.h"
-#include "stb_image.h"
 
+#include "stb_image.h"
 #include <GL/glew.h>
 #include <GL/gl.h>
 #include <GL/glu.h>
 #include <GLM/glm.hpp>
 #include <SDL2/SDL.h>
 #include <vector>
+#include <unordered_map>
 
 
-#define u32 uint32_t
-#define u16 uint16_t
+struct Texture;
+struct Material;
+
+static std::unordered_map<std::string, Texture *>  gTextures;
+static std::unordered_map<std::string, Material *> gMaterials;
 
 struct Vertex
 {
@@ -23,7 +26,7 @@ struct Vertex
     glm::vec4 joints;
     glm::vec4 weights;
 };
- 
+
 struct VertexSOA
 {
     glm::vec3 *position;
@@ -33,17 +36,25 @@ struct VertexSOA
     glm::vec4 *weights;
 };
 
+struct Transform
+{
+    glm::vec3 scale       = {};
+    glm::vec3 rotation    = {};
+    glm::vec3 translation = {};
+};
+
 static void GLAPIENTRY MessageCallback(GLenum source,
     GLenum                                    type,
     GLuint                                    id,
     GLenum                                    severity,
     GLsizei                                   length,
-    const GLchar *                            message,
-    const void *                              userParam)
+    const GLchar                             *message,
+    const void                               *userParam)
 {
-    SDL_LogCritical(SDL_LOG_CATEGORY_RENDER, "GL CALLBACK: %s type = 0x%x, severity = 0x%x, message = %s\n",
-        (type == GL_DEBUG_TYPE_ERROR ? "** GL ERROR **" : ""),
-        type, severity, message);
+    if (severity != GL_DEBUG_SEVERITY_NOTIFICATION)
+        SDL_LogCritical(SDL_LOG_CATEGORY_RENDER, "GL CALLBACK: %s type = 0x%x, severity = 0x%x, message = %s\n",
+            (type == GL_DEBUG_TYPE_ERROR ? "** GL ERROR **" : ""),
+            type, severity, message);
 }
 
 #define ARR_COUNT(arr) (sizeof(arr) / sizeof(arr[0]))
@@ -72,7 +83,7 @@ static std::vector<Vertex> cube_verts = {
     { { -1.0, 1.0, -1.0 }, { 1.0, 1.0, 1.0 }, { 0.0, 1.0 } }
 };
 
-static std::vector<u16> cube_indices = {
+static std::vector<uint16_t> cube_indices = {
     // front
     0, 1, 2,
     2, 3, 0,
@@ -93,7 +104,7 @@ static std::vector<u16> cube_indices = {
     6, 7, 3
 };
 
-static u16 triangle_indices[] = {
+static uint16_t triangle_indices[] = {
     0, 1, 2
 };
 

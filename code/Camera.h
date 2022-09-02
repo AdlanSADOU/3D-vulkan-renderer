@@ -2,47 +2,96 @@
 
 #include <GLM/glm.hpp>
 
-//camera
+// camera
 struct Camera
 {
-    glm::vec3 position   = {};
-    glm::vec3 up         = {};
-    glm::vec3 right      = {};
-    glm::vec3 forward    = {};
-    glm::vec3 at         = {};
-    glm::mat4 projection = {};
-    glm::mat4 view       = {};
-    float     pitch      = {};
-    float     yaw        = {};
-    float     roll       = {};
-    float     fov        = {};
-    float     aspect     = {};
-    float     near       = {};
-    float     far        = {};
+    glm::vec3 _position    = {};
+    glm::vec3 _up          = {};
+    glm::vec3 _right       = {};
+    glm::vec3 _forward     = {};
+    glm::vec3 _at          = {};
+    glm::mat4 _projection  = {};
+    glm::mat4 _view        = {};
+    float     _pitch       = {};
+    float     _yaw         = {};
+    float     _roll        = {};
+    float     _fov         = {};
+    float     _aspect      = {};
+    float     _near        = {};
+    float     _far         = {};
+    float     _speed       = 20.f;
+    float     _sensitivity = 0.46f;
+
+
+    void CameraCreate(glm::vec3 position, float fov, float aspect, float near, float far);
+    void CameraUpdate(Input &input, float dt);
 };
 static Camera *gCameraInUse;
 
-static void CameraCreate(Camera *camera, glm::vec3 position, float fov, float aspect, float near, float far)
+void Camera::CameraCreate(glm::vec3 position, float fov, float aspect, float near, float far)
 {
-    camera->forward  = { 0, 0, -1 };
-    camera->up       = { 0, 1, 0 };
-    camera->yaw      = -90;
-    camera->pitch    = 0;
-    camera->fov      = fov;
-    camera->aspect   = aspect;
-    camera->near     = near;
-    camera->far      = far;
-    camera->position = position;
+    _forward  = { 0, 0, -1 };
+    _up       = { 0, 1, 0 };
+    _yaw      = -90;
+    _pitch    = 0;
+    _fov      = fov;
+    _aspect   = aspect;
+    _near     = near;
+    _far      = far;
+    _position = position;
 
-    glm::vec3 at         = camera->position + camera->forward;
-    glm::mat4 projection = glm::perspective(Radians(fov), aspect, near, far);
-    glm::mat4 view       = glm::lookAt(camera->position, at, camera->up);
+    _at         = _position + _forward;
+    _projection = glm::perspective(Radians(_fov), _aspect, _near, _far);
+    _view       = glm::lookAt(_position, _at, _up);
 }
 
-static void CameraUpdate()
+void Camera::CameraUpdate(Input &input, float dt)
 {
-    Camera c                 = *gCameraInUse;
-    gCameraInUse->at         = gCameraInUse->position + gCameraInUse->forward;
-    gCameraInUse->projection = glm::perspective(gCameraInUse->fov, gCameraInUse->aspect, gCameraInUse->near, gCameraInUse->far);
-    gCameraInUse->view       = glm::lookAt(gCameraInUse->position, gCameraInUse->at, gCameraInUse->up);
+
+    if (input.up) {
+        _position += _speed * _forward * dt;
+    }
+    if (input.down) {
+        _position -= _speed * _forward * dt;
+    }
+    if (input.left) {
+        _position -= _speed * glm::normalize(glm::cross(_forward, _up)) * dt;
+    }
+    if (input.right) {
+        _position += _speed * glm::normalize(glm::cross(_forward, _up)) * dt;
+    }
+
+    float factor = 0;
+    if (input.E) factor += .15f;
+    if (input.Q) factor -= .15f;
+    _position.y += factor;
+
+    static float xrelPrev = 0;
+    static float yrelPrev = 0;
+    int          xrel;
+    int          yrel;
+
+    SDL_GetRelativeMouseState(&xrel, &yrel);
+    if (input.mouse.right) {
+        SDL_SetRelativeMouseMode(SDL_TRUE);
+        // printVec("rel", {(float)xrel, (float)yrel, 0});
+
+        if (xrelPrev != xrel)
+            _yaw += xrel * .1f * _sensitivity;
+        if (xrelPrev != xrel)
+            _pitch -= yrel * .1f * _sensitivity;
+    } else
+        SDL_SetRelativeMouseMode(SDL_FALSE);
+
+
+    _forward.x = cosf(Radians(_yaw)) * cosf(Radians(_pitch));
+    _forward.y = sinf(Radians(_pitch));
+    _forward.z = sinf(Radians(_yaw)) * cosf(Radians(_pitch));
+    _forward   = glm::normalize(_forward);
+    xrelPrev  = xrel;
+    yrelPrev  = yrel;
+
+    _at         = _position + _forward;
+    _projection = glm::perspective(_fov, _aspect, _near, _far);
+    _view       = glm::lookAt(_position, _at, _up);
 }

@@ -5,33 +5,16 @@
     Instead do Model._submeshMaterials.push_back()
 
     [Suggestions]:
-        - indexed assets
-        - indexed materials(load shader once and use multiple instances)
-            - need hashtable
-                - learn big O notation
-        - batched meshes
+        - global asset hash maps ?
+            each time a model is created, the global Meshes hash table will be checked
+            if no entry for that model, it'll create one
 
 
-    Issues:
-    - for some reason the cube texture is being used on the feet.
-    Feet is mesh the first drawn mesh.
-    One cause might be, as the cube is being drawn last, than the last bound
-    material is used on the next iteration, which are the feet.
-
-    [checked: false assumption]
-    changing draw order does not affect the issue
-
-    [solved] the issue was that the original texture for feet has been overwritten
-    by the texture for the sword
-
-    [solution] make blender output texture names prefixed with project name... or something
-
-
+    ---------------------------ANIMATION STUFF-------------------------
     - how to find the root joint? :
         the root joint is the last element in the data->nodes[] array
 
     - each joint has a matrix called inverseBindMatrix
-        what's its purpose?
             transforms vertices into the local space of the joint
 
     - "each joint node may have a local tranform and an array of children"
@@ -49,6 +32,7 @@
         - https://www.khronos.org/opengl/wiki/Skeletal_Animation
         - https://www.freecodecamp.org/news/advanced-opengl-animation-technique-skeletal-animations/
         - https://moddb.fandom.com/wiki/OpenGL:Tutorials:Basic_Bones_System#How_does_a_bone_system_work?
+        // https://www.gamedev.net/forums/topic/706777-optimizing-skeletal-animation-system/
 */
 
 
@@ -68,21 +52,18 @@
 
 #include "Camera.h"
 #include <vector>
-#include <unordered_map>
 
 // todo(ad): should these be provided as globals?
 // how should we deal with general window parameters?
-extern u32 WND_WIDTH;
-extern u32 WND_HEIGHT;
+extern uint32_t WND_WIDTH;
+extern uint32_t WND_HEIGHT;
 
 static Camera camera = {};
 
 /** note(ad):
  * we might want to find a proper way to handle
  * assets down the road if this becomes a problem
-*/
-std::unordered_map<std::string, Texture *>  gTextures;
-std::unordered_map<std::string, Material *> gMaterials;
+ */
 
 struct Ground
 {
@@ -92,29 +73,14 @@ struct Ground
 
 struct Entity
 {
-    Model     model;
-    glm::vec3 position;
-    glm::vec3 rotation;
-    glm::vec3 scale;
+    Model2 model;
 };
 
-Mesh cubeMesh {};
-
-Entity entities[3] {};
-
-struct Point
-{
-    float     position[3];
-    uint32_t  VAO;
-    uint32_t  VBO;
-    Material *material;
-};
-Point point {};
-
+std::vector<Entity> entities {};
 
 void Example3DInit()
 {
-    CameraCreate(&camera, { 0, 5, 16 }, 45.f, WND_WIDTH / (float)WND_HEIGHT, .8f, 1000.f);
+    camera.CameraCreate({ 0, 5, 16 }, 45.f, WND_WIDTH / (float)WND_HEIGHT, .8f, 1000.f);
     gCameraInUse = &camera;
 
     gTextures.insert({ "brick_wall", TextureCreate("assets/brick_wall.jpg") });
@@ -134,7 +100,7 @@ void Example3DInit()
 
 
 
-    PrintAnimationClipTransforms();
+    // PrintAnimationClipTransforms();
 
 
     std::string lowPoly01       = "low_poly_01.gltf";
@@ -142,190 +108,87 @@ void Example3DInit()
 
     std::string path = "assets/" + char05Milestone;
 
+
+    entities.resize(3);
+
     entities[0].model.Create(path.c_str());
-    entities[0].model._meshes[0]._submeshMaterials[0] = gMaterials["mileMaterial"];
-    entities[0].model._meshes[0]._submeshMaterials[1] = gMaterials["mileMaterial"];
-    entities[0].model._meshes[0]._submeshMaterials[2] = gMaterials["mileMaterial"];
-    entities[0].model._transform                      = glm::mat4(1);
-    entities[0].position                              = { 0.f, 0.f, -6.f };
-    entities[0].rotation                              = { 0.f, 0.f, 0.f };
-    entities[0].scale                                 = { .05, .05, .05 };
+    entities[0].model._meshes[0]._materials[0] = gMaterials["mileMaterial"];
+    entities[0].model._meshes[0]._materials[1] = gMaterials["mileMaterial"];
+    entities[0].model._meshes[0]._materials[2] = gMaterials["mileMaterial"];
+    entities[0].model._transform.translation   = { 0.f, 0.f, -6.f };
+    entities[0].model._transform.rotation      = { 0.f, 0.f, 0.f };
+    entities[0].model._transform.scale         = { .05, .05, .05 };
+
 
     entities[1].model.Create("assets/skinned_cube.gltf");
-    entities[1].model._meshes[0]._submeshMaterials[0] = gMaterials["cubeMaterial"];
-    entities[1].model._transform                      = glm::mat4(1);
-    entities[1].position                              = { -4.f, 0, -6.f };
-    entities[1].rotation                              = { 0, 0, 0 };
-    entities[1].scale                                 = { 1, 1, 1 };
+    entities[1].model._meshes[0]._materials[0] = gMaterials["cubeMaterial"];
+    entities[1].model._transform.translation   = { -4.f, 0, -6.f };
+    entities[1].model._transform.rotation      = { 0, 0, 0 };
+    entities[1].model._transform.scale         = { 1, 1, 1 };
 
 
     entities[2].model.Create("assets/chibi_02_ex.gltf");
-    entities[2].model._meshes[0]._submeshMaterials[0] = gMaterials["chibiMaterial"];
-    // entities[2].model._meshes[1]._submeshMaterials[0] = &chibiMaterial;
-    entities[2].model._transform = glm::mat4(1);
-    entities[2].position         = { 4.f, 0.f, -6.f };
-    entities[2].rotation         = { 0.f, 0.f, 0.f };
-    entities[2].scale            = { 0.05f, 0.05f, 0.05f };
+    entities[2].model._meshes[0]._materials[0] = gMaterials["chibiMaterial"];
+    entities[2].model._transform.translation   = { 4.f, 0.f, -6.f };
+    entities[2].model._transform.rotation      = { 0.f, 0.f, 0.f };
+    entities[2].model._transform.scale         = { 0.05f, 0.05f, 0.05f };
 
 
     ground.material = gMaterials["groundMaterial"];
     glGenVertexArrays(1, &ground.VAO);
-
-    point = {
-        .position = { 0.f, 0.f, 0.f },
-        .material = gMaterials["standard"]
-    };
-
-    glGenVertexArrays(1, &point.VAO);
-    glBindVertexArray(point.VAO);
-
-    glGenBuffers(1, &point.VBO);
-    glBindBuffer(GL_ARRAY_BUFFER, point.VBO);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(point.position), point.position, GL_STATIC_DRAW);
-
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, (void *)0);
 }
 
-float speed       = 20.f;
-float sensitivity = 0.46f;
-
-void DrawPoint(Point &p, glm::vec4 color)
-{
-    ShaderUse(p.material->_shader->programID);
-    glm::mat4 model = glm::mat4(1);
-    model           = glm::translate(model, { 1, 1, 1 });
-    ShaderSetMat4ByName("projection", gCameraInUse->projection, p.material->_shader->programID);
-    ShaderSetMat4ByName("view", gCameraInUse->view, p.material->_shader->programID);
-    ShaderSetMat4ByName("model", model, p.material->_shader->programID);
-    glEnable(GL_PROGRAM_POINT_SIZE);
-    glPointSize(60.f);
-    glBindVertexArray(p.VAO);
-    glDrawArrays(GL_POINTS, 0, 1);
-}
 
 void Example3DUpdateDraw(float dt, Input input)
 {
-    glm::vec3 directionDelta { 0, 0, 0 };
+    gCameraInUse->_aspect = WND_WIDTH / (float)WND_HEIGHT;
+    gCameraInUse->CameraUpdate(input, dt);
 
-#if 0
-    if (input.right) {
-        directionDelta.x = .01f;
-    }
-    if (input.left) {
-        directionDelta.x = -.01f;
-    }
-    if (input.Q) {
-        directionDelta.y = .01f;
-    }
-    if (input.E) {
-        directionDelta.y = -.01f;
-    }
-    if (input.up) {
-        directionDelta.z = -.01f;
-    }
-    if (input.down) {
-        directionDelta.z = .01f;
-    }
-#endif
-
-    if (input.up) {
-        camera.position += speed * camera.forward * dt;
-    }
-    if (input.down) {
-        camera.position -= speed * camera.forward * dt;
-    }
-    if (input.left) {
-        camera.position -= speed * glm::normalize(glm::cross(camera.forward, camera.up)) * dt;
-    }
-    if (input.right) {
-        camera.position += speed * glm::normalize(glm::cross(camera.forward, camera.up)) * dt;
-    }
-
-    float factor = 0;
-    if (input.E) factor += .15f;
-    if (input.Q) factor -= .15f;
-    camera.position.y += factor;
-
-    static float xrelPrev = 0;
-    static float yrelPrev = 0;
-    int          xrel;
-    int          yrel;
-
-    SDL_GetRelativeMouseState(&xrel, &yrel);
-    if (input.mouse.right) {
-        SDL_SetRelativeMouseMode(SDL_TRUE);
-        // printVec("rel", {(float)xrel, (float)yrel, 0});
-
-        if (xrelPrev != xrel)
-            camera.yaw += xrel * .1f * sensitivity;
-        if (xrelPrev != xrel)
-            camera.pitch -= yrel * .1f * sensitivity;
-    } else
-        SDL_SetRelativeMouseMode(SDL_FALSE);
-
-
-    camera.forward.x = cosf(Radians(camera.yaw)) * cosf(Radians(camera.pitch));
-    camera.forward.y = sinf(Radians(camera.pitch));
-    camera.forward.z = sinf(Radians(camera.yaw)) * cosf(Radians(camera.pitch));
-    camera.forward   = glm::normalize(camera.forward);
-    xrelPrev         = xrel;
-    yrelPrev         = yrel;
-
-    gCameraInUse->aspect = WND_WIDTH / (float)WND_HEIGHT;
-    CameraUpdate();
-    static float modelYaw = 0;
-    modelYaw += 1.f;
-    entities[0].rotation.y = modelYaw;
-
-    /**
-     * DrawPoint(p1, color);
-     * DrawLine(p1, p2, color);
-     */
-
-
+    // draw wireframe
+    // glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 
 
 
     glEnable(GL_DEPTH_TEST);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    // todo(): simplify to ShaderUse(material->_shader)
 
-    DrawPoint(point, { 1, 1, 1, .1f });
-
+    //
+    // Ground plane
+    //
     ShaderUse(ground.material->_shader->programID);
-    ShaderSetMat4ByName("proj", gCameraInUse->projection, ground.material->_shader->programID);
-    ShaderSetMat4ByName("view", gCameraInUse->view, ground.material->_shader->programID);
+    ShaderSetMat4ByName("proj", gCameraInUse->_projection, ground.material->_shader->programID);
+    ShaderSetMat4ByName("view", gCameraInUse->_view, ground.material->_shader->programID);
     glBindTexture(GL_TEXTURE_2D, ground.material->_texture->id);
     glBindVertexArray(ground.VAO);
     glDrawArrays(GL_TRIANGLES, 0, 6);
 
-
-
-    for (size_t n = 0; n < ARR_COUNT(entities); n++) {
-        for (int i = 0; i < entities[n].model._meshCount; i++) {
+    //
+    // Entities
+    //
+    for (size_t n = 0; n < entities.size(); n++) {
+        for (int i = 0; i < entities[n].model._meshes.size(); i++) {
             glm::mat4 model = glm::mat4(1);
 
-            model = glm::translate(model, entities[n].position)
-                * glm::rotate(model, (Radians(entities[n].rotation.x)), glm::vec3(1, 0, 0))
-                * glm::rotate(model, (Radians(entities[n].rotation.y)), glm::vec3(0, 1, 0))
-                * glm::rotate(model, (Radians(entities[n].rotation.z)), glm::vec3(0, 0, 1))
-                * glm::scale(model, entities[n].scale)
-                * entities[n].model._transform;
+            model = glm::translate(model, entities[n].model._transform.translation)
+                * glm::rotate(model, (Radians(entities[n].model._transform.rotation.x)), glm::vec3(1, 0, 0))
+                * glm::rotate(model, (Radians(entities[n].model._transform.rotation.y)), glm::vec3(0, 1, 0))
+                * glm::rotate(model, (Radians(entities[n].model._transform.rotation.z)), glm::vec3(0, 0, 1))
+                * glm::scale(model, entities[n].model._transform.scale);
 
-            for (int j = 0; j < entities[n].model._meshes[i]._submeshCount; j++) {
-                Material *material = entities[n].model._meshes[i]._submeshMaterials[j];
+            for (int j = 0; j < entities[n].model._meshes[i]._VAOs.size(); j++) {
+
+                Material *material = entities[n].model._meshes[i]._materials[j];
                 ShaderUse(material->_shader->programID);
-                ShaderSetMat4ByName("projection", gCameraInUse->projection, material->_shader->programID);
-                ShaderSetMat4ByName("view", gCameraInUse->view, material->_shader->programID);
+                ShaderSetMat4ByName("projection", gCameraInUse->_projection, material->_shader->programID);
+                ShaderSetMat4ByName("view", gCameraInUse->_view, material->_shader->programID);
                 ShaderSetMat4ByName("model", model, material->_shader->programID);
                 glBindTexture(GL_TEXTURE_2D, material->_texture->id);
 
-                Mesh mesh = entities[n].model._meshes[i];
+                Mesh2 mesh = entities[n].model._meshes[i];
                 glBindVertexArray(mesh._VAOs[j]);
-                glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mesh._IBOs[j]);
-                glDrawElements(GL_TRIANGLES, mesh._submeshIndices[j].size(), GL_UNSIGNED_SHORT, (void *)0);
+                glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, entities[n].model._DataBufferID);
+                glDrawElements(GL_TRIANGLES, mesh._indicesCount[j], GL_UNSIGNED_SHORT, (void *)mesh._indicesOffsets[j]);
             }
         }
     }
