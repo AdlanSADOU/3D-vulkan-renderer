@@ -1,31 +1,62 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string>
-
-
-#define STB_IMAGE_IMPLEMENTATION
-#include <adGL.h>
 #include <SDL2/SDL.h>
+#include <GL/glew.h>
+
+
+
+
+static void GLAPIENTRY MessageCallback(GLenum source,
+    GLenum                                    type,
+    GLuint                                    id,
+    GLenum                                    severity,
+    GLsizei                                   length,
+    const GLchar                             *message,
+    const void                               *userParam)
+{
+    if (severity != GL_DEBUG_SEVERITY_NOTIFICATION)
+        SDL_LogCritical(SDL_LOG_CATEGORY_RENDER, "GL CALLBACK: %s type = 0x%x, severity = 0x%x, message = %s\n",
+            (type == GL_DEBUG_TYPE_ERROR ? "** GL ERROR **" : ""),
+            type, severity, message);
+}
+
+
+
+
+struct Input;
+
+void Example3DInit();
+void Example3DUpdateDraw(float dt, Input input);
 
 #define VSYNC 1
 
-struct GLVersion
+struct Input
 {
-    int Major;
-    int Minor;
-} gl_version;
+    bool up;
+    bool down;
+    bool left;
+    bool right;
+    bool Q;
+    bool E;
+
+    struct Mouse
+    {
+        int32_t xrel;
+        int32_t yrel;
+        bool    left;
+        bool    right;
+    } mouse;
+} input = {};
 
 uint32_t WND_WIDTH  = 1200;
 uint32_t WND_HEIGHT = 800;
 
 bool g_running = true;
 
-Input input = {};
-
-const uint64_t MAX_DT_SAMPLES = 1;
-
-float dt_samples[MAX_DT_SAMPLES] = {};
-float dt_averaged                = 0;
+const uint64_t MAX_DT_SAMPLES             = 1;
+float          dt_samples[MAX_DT_SAMPLES] = {};
+float          dt_averaged                = 0;
 
 // note(ad): if we want to make this into a "framework"
 // we must provide init and shutdown
@@ -51,7 +82,7 @@ extern int main(int argc, char **argv)
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
 
     int           window_flags = SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE;
-    SDL_Window *  window       = SDL_CreateWindow("awesome", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, WND_WIDTH, WND_HEIGHT, window_flags);
+    SDL_Window   *window       = SDL_CreateWindow("awesome", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, WND_WIDTH, WND_HEIGHT, window_flags);
     SDL_GLContext glcontext    = SDL_GL_CreateContext(window);
 
     if (SDL_GL_SetSwapInterval(VSYNC) < 0) {
@@ -70,9 +101,15 @@ extern int main(int argc, char **argv)
     glDebugMessageCallback(MessageCallback, 0);
 #endif
 
-    SDL_GL_GetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, &gl_version.Major);
-    SDL_GL_GetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, &gl_version.Minor);
-    SDL_Log("Initialized OpenGL context %d.%d Core Profile", gl_version.Major, gl_version.Minor);
+    struct GLVersion
+    {
+        int major;
+        int minor;
+    }glVersion;
+
+    SDL_GL_GetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, &glVersion.major);
+    SDL_GL_GetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, &glVersion.minor);
+    SDL_Log("Initialized OpenGL context %d.%d Core Profile", glVersion.major, glVersion.minor);
 
 
 
@@ -89,11 +126,9 @@ extern int main(int argc, char **argv)
         SDL_Event event = {};
         while (SDL_PollEvent(&event)) {
             SDL_Keycode key = event.key.keysym.sym;
-            // SDL_Log("%d\n", key);
             switch (event.type) {
 
                 // https://wiki.libsdl.org/SDL_Event
-                //////////////////////////////
                 // Key Events
                 case SDL_KEYUP:
                     if (key == SDLK_ESCAPE) g_running = false;
@@ -141,7 +176,7 @@ extern int main(int argc, char **argv)
                             int w, h;
                             SDL_GL_GetDrawableSize(window, &w, &h);
                             glViewport(0, 0, w, h);
-                            WND_WIDTH = w;
+                            WND_WIDTH  = w;
                             WND_HEIGHT = h;
                             break;
 

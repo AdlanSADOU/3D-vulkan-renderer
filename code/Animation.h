@@ -1,6 +1,5 @@
 #pragma once
 
-#include <vector>
 /**
  * updateCurrentAnimation(double globalTime)
  *      updateBone(size_t index, double time, glm::mat4 parentMatrix)
@@ -15,7 +14,7 @@ struct Joint
     char     *name;
     int8_t    parent;
     glm::mat4 invBindPose;
-} * joints;
+};
 
 struct Skeleton
 {
@@ -23,13 +22,6 @@ struct Skeleton
     uint32_t           jointCount;
     std::vector<Joint> joints;
 };
-
-/**
- * Is a pose sample actually an offset relative to
- * the rest pose or an offset relative to the previous pose...?
- * ITS NONE OF THAT
- */
-
 
 struct AnimatedJoint
 {
@@ -119,8 +111,8 @@ static void PrintAnimationClipTransforms()
     for (size_t joint_idx = 0; joint_idx < data->skins[0].joints_count; joint_idx++) {
         cgltf_node **joints = data->skins[0].joints;
 
-        glm::vec3 T;
-        glm::quat Q;
+        glm::vec3 T {};
+        glm::quat Q {};
 
         // it would have been much more practical if channels could be indexed by bone indices
         // and each channel per bone would contain SQT values for each frame
@@ -149,7 +141,7 @@ static void PrintAnimationClipTransforms()
                 }
             }
             glm::vec3 R = glm::eulerAngles(Q);
-            SDL_Log("joint:[%s] frame[%d] T(%.2f, %.2f, %.2f) R(%.2f, %.2f, %.2f)", joints[joint_idx]->name, frameCounter, T.x, T.y, T.z, Degrees(R.x), Degrees(R.y), Degrees(R.z));
+            SDL_Log("joint:[%s] frame[%zu] T(%.2f, %.2f, %.2f) R(%.2f, %.2f, %.2f)", joints[joint_idx]->name, frameCounter, T.x, T.y, T.z, Degrees(R.x), Degrees(R.y), Degrees(R.z));
         }
     }
 

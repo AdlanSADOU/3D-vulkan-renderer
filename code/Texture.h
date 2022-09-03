@@ -14,6 +14,7 @@ static Texture *TextureCreate(const char *path)
 
 
     Texture *t = (Texture *)malloc(sizeof(Texture));
+    assert(t);
 
     unsigned char *pixels = stbi_load(path, &t->width, &t->height, &t->channelCount, 0);
     if (!pixels) {

@@ -1,11 +1,71 @@
 #pragma once
 
-#include "shader.h"
-#include "texture.h"
 
-#include <stb_image.h>
-#include <cgltf.h>
-#include <vector>
+struct Vertex
+{
+    glm::vec3 position;
+    glm::vec3 normal;
+    glm::vec2 texCoord;
+    glm::vec4 joints;
+    glm::vec4 weights;
+};
+
+struct VertexSOA
+{
+    glm::vec3 *position;
+    glm::vec3 *normal;
+    glm::vec2 *texCoord;
+    glm::vec4 *joints;
+    glm::vec4 *weights;
+};
+
+static float triangle_verts[] = {
+    -0.5f, -0.5f, -0.5f,
+    0.5f, -0.5f, -0.5f,
+    0.0f, 0.5f, -0.5f
+};
+
+static std::vector<Vertex> cube_verts = {
+    // front
+    { { -1.0, -1.0, 1.0 }, { 1.0, 1.0, 1.0 }, { 0.0, 0.0 } },
+    { { 1.0, -1.0, 1.0 }, { 1.0, 1.0, 1.0 }, { 1.0, 0.0 } },
+    { { 1.0, 1.0, 1.0 }, { 1.0, 1.0, 1.0 }, { 1.0, 1.0 } },
+    { { -1.0, 1.0, 1.0 }, { 1.0, 1.0, 1.0 }, { 0.0, 1.0 } },
+    // back
+    { { -1.0, -1.0, -1.0 }, { 1.0, 1.0, 1.0 }, { 0.0, 0.0 } },
+    { { 1.0, -1.0, -1.0 }, { 1.0, 1.0, 1.0 }, { 1.0, 0.0 } },
+    { { 1.0, 1.0, -1.0 }, { 1.0, 1.0, 1.0 }, { 1.0, 1.0 } },
+    { { -1.0, 1.0, -1.0 }, { 1.0, 1.0, 1.0 }, { 0.0, 1.0 } }
+};
+
+static std::vector<uint16_t> cube_indices = {
+    // front
+    0, 1, 2,
+    2, 3, 0,
+    // right
+    1, 5, 6,
+    6, 2, 1,
+    // back
+    7, 6, 5,
+    5, 4, 7,
+    // left
+    4, 0, 3,
+    3, 7, 4,
+    // bottom
+    4, 5, 1,
+    1, 0, 4,
+    // top
+    3, 2, 6,
+    6, 7, 3
+};
+
+static uint16_t triangle_indices[] = {
+    0, 1, 2
+};
+
+
+
+
 
 struct Material
 {
@@ -18,8 +78,10 @@ struct Material
 static Material *MaterialCreate(const char *shaderPath, Texture *texture)
 {
     Material *m = (Material *)malloc(sizeof(Material));
+    assert(m);
 
     m->_texture = texture;
+
     if (!(m->_shader = LoadShader(shaderPath))) {
         SDL_Log("shader prog failed\n");
         free(m);
@@ -28,6 +90,14 @@ static Material *MaterialCreate(const char *shaderPath, Texture *texture)
 
     return m;
 }
+
+
+
+
+
+//---------------------------------------
+// Interleaved Meshes implementation
+//---------------------------------------
 
 struct Mesh
 {
@@ -48,110 +118,61 @@ struct Mesh
 
     std::vector<Material *> _submeshMaterials;
 
-    void Create()
-    {
-        _VAOs.resize(_submeshCount);
-        _VBOs.resize(_submeshCount);
-        _IBOs.resize(_submeshCount);
-
-        for (size_t i = 0; i < _submeshVertices.size(); i++) {
-
-            glGenVertexArrays(1, &_VAOs[i]);
-            glBindVertexArray(_VAOs[i]);
-
-            glGenBuffers(1, &_VBOs[i]);
-            glBindBuffer(GL_ARRAY_BUFFER, _VBOs[i]);
-            glBufferData(GL_ARRAY_BUFFER, _submeshVertices[i].size() * sizeof(Vertex) /*bytes*/, _submeshVertices[i].data(), GL_DYNAMIC_DRAW);
-
-            glGenBuffers(1, &_IBOs[i]);
-            glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, _IBOs[i]);
-            glBufferData(GL_ELEMENT_ARRAY_BUFFER, _submeshIndices[i].size() * sizeof(uint16_t) /*bytes*/, _submeshIndices[i].data(), GL_DYNAMIC_DRAW);
-
-            glEnableVertexAttribArray(0);
-            glVertexAttribPointer(
-                0 /*layout location*/,
-                3 /*number of components*/,
-                GL_FLOAT /*type of components*/,
-                GL_FALSE,
-                sizeof(Vertex),
-                (void *)offsetof(Vertex, Vertex::position));
-
-            glEnableVertexAttribArray(1);
-            glVertexAttribPointer(
-                1 /*layout location*/,
-                3 /*number of components*/,
-                GL_FLOAT /*type of components*/,
-                GL_FALSE,
-                sizeof(Vertex),
-                (void *)offsetof(Vertex, Vertex::normal));
-
-            glEnableVertexAttribArray(2);
-            glVertexAttribPointer(
-                2 /*layout location*/,
-                2 /*number of components*/,
-                GL_FLOAT /*type of components*/,
-                GL_FALSE,
-                sizeof(Vertex),
-                (void *)offsetof(Vertex, Vertex::texCoord));
-
-            glBindVertexArray(0);
-            glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-            glBindBuffer(GL_ARRAY_BUFFER, 0);
-        }
-    }
-
-    void Create2()
-    {
-        _VAOs.resize(_submeshCount);
-        _VBOs.resize(_submeshCount);
-        _IBOs.resize(_submeshCount);
-
-        for (size_t i = 0; i < _submeshVertices.size(); i++) {
-
-            glGenVertexArrays(1, &_VAOs[i]);
-            glBindVertexArray(_VAOs[i]);
-
-            glGenBuffers(1, &_VBOs[i]);
-            glBindBuffer(GL_ARRAY_BUFFER, _VBOs[i]);
-            glBufferData(GL_ARRAY_BUFFER, _submeshVertices[i].size() * sizeof(Vertex) /*bytes*/, _submeshVertices[i].data(), GL_DYNAMIC_DRAW);
-
-            glGenBuffers(1, &_IBOs[i]);
-            glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, _IBOs[i]);
-            glBufferData(GL_ELEMENT_ARRAY_BUFFER, _submeshIndices[i].size() * sizeof(uint16_t) /*bytes*/, _submeshIndices[i].data(), GL_DYNAMIC_DRAW);
-
-            glEnableVertexAttribArray(0);
-            glVertexAttribPointer(
-                0 /*layout location*/,
-                3 /*number of components*/,
-                GL_FLOAT /*type of components*/,
-                GL_FALSE,
-                sizeof(Vertex),
-                (void *)offsetof(Vertex, Vertex::position));
-
-            glEnableVertexAttribArray(1);
-            glVertexAttribPointer(
-                1 /*layout location*/,
-                3 /*number of components*/,
-                GL_FLOAT /*type of components*/,
-                GL_FALSE,
-                sizeof(Vertex),
-                (void *)offsetof(Vertex, Vertex::normal));
-
-            glEnableVertexAttribArray(2);
-            glVertexAttribPointer(
-                2 /*layout location*/,
-                2 /*number of components*/,
-                GL_FLOAT /*type of components*/,
-                GL_FALSE,
-                sizeof(Vertex),
-                (void *)offsetof(Vertex, Vertex::texCoord));
-
-            glBindVertexArray(0);
-            glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-            glBindBuffer(GL_ARRAY_BUFFER, 0);
-        }
-    }
+    void Create();
 };
+
+void Mesh::Create()
+{
+    _VAOs.resize(_submeshCount);
+    _VBOs.resize(_submeshCount);
+    _IBOs.resize(_submeshCount);
+
+    for (size_t i = 0; i < _submeshVertices.size(); i++) {
+
+        glGenVertexArrays(1, &_VAOs[i]);
+        glBindVertexArray(_VAOs[i]);
+
+        glGenBuffers(1, &_VBOs[i]);
+        glBindBuffer(GL_ARRAY_BUFFER, _VBOs[i]);
+        glBufferData(GL_ARRAY_BUFFER, _submeshVertices[i].size() * sizeof(Vertex) /*bytes*/, _submeshVertices[i].data(), GL_DYNAMIC_DRAW);
+
+        glGenBuffers(1, &_IBOs[i]);
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, _IBOs[i]);
+        glBufferData(GL_ELEMENT_ARRAY_BUFFER, _submeshIndices[i].size() * sizeof(uint16_t) /*bytes*/, _submeshIndices[i].data(), GL_DYNAMIC_DRAW);
+
+        glEnableVertexAttribArray(0);
+        glVertexAttribPointer(
+            0 /*layout location*/,
+            3 /*number of components*/,
+            GL_FLOAT /*type of components*/,
+            GL_FALSE,
+            sizeof(Vertex),
+            (void *)offsetof(Vertex, Vertex::position));
+
+        glEnableVertexAttribArray(1);
+        glVertexAttribPointer(
+            1 /*layout location*/,
+            3 /*number of components*/,
+            GL_FLOAT /*type of components*/,
+            GL_FALSE,
+            sizeof(Vertex),
+            (void *)offsetof(Vertex, Vertex::normal));
+
+        glEnableVertexAttribArray(2);
+        glVertexAttribPointer(
+            2 /*layout location*/,
+            2 /*number of components*/,
+            GL_FLOAT /*type of components*/,
+            GL_FALSE,
+            sizeof(Vertex),
+            (void *)offsetof(Vertex, Vertex::texCoord));
+
+        glBindVertexArray(0);
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+        glBindBuffer(GL_ARRAY_BUFFER, 0);
+    }
+}
+
 
 struct Model
 {
@@ -215,8 +236,9 @@ struct Model
 
 
 
-//-------------------------------------------------------------------
-
+//---------------------------------------
+// Non-interleaved Meshes implementation
+//---------------------------------------
 struct Mesh2
 {
     std::vector<Material *> _materials      = {};
@@ -259,16 +281,13 @@ void Model2::Create(const char *path)
                 SDL_Log("%s:%d: no meshes found...", __FILE__, __LINE__);
                 return;
             }
+            result = cgltf_load_buffers(&options, data, path);
         }
     }
 
 
 
 
-
-    if (result == cgltf_result_success) {
-        result = cgltf_load_buffers(&options, data, path);
-    }
 
     _meshes.resize(data->meshes_count);
     for (size_t mesh_idx = 0; mesh_idx < data->meshes_count; mesh_idx++) {

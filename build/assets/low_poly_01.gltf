@@ -40,9 +40,9 @@
             "primitives" : [
                 {
                     "attributes" : {
+                        "TEXCOORD_0" : 2,
                         "POSITION" : 0,
-                        "NORMAL" : 1,
-                        "TEXCOORD_0" : 2
+                        "NORMAL" : 1
                     },
                     "indices" : 3,
                     "material" : 0

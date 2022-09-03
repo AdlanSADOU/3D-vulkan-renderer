@@ -1,3 +1,4 @@
+#VERT_START
 #version 450 core
 
 layout (location = 0) in vec3 vPos;
@@ -18,3 +19,23 @@ void main()
     texCoord = vTex;
     // color = vec4(1,1,1,1);
 }
+#VERT_END
+#FRAG_START
+#version 450 core
+
+// in vec4 inColor;
+in vec2 texCoord;
+in vec4 color;
+
+out vec4 FragColor;
+
+uniform sampler2D texSampler;
+
+void main()
+{
+    // FragColor = mix(texture(texSampler, texCoord), texture(texSampler1, texCoord), 0.2) * inColor;
+    // FragColor = texture(texSampler, texCoord) * inColor;
+    FragColor = texture(texSampler, texCoord);
+}
+
+#FRAG_END

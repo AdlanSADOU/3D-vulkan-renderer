@@ -41,26 +41,24 @@
 // https://www.khronos.org/files/gltf20-reference-guide.pdf
 // https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html
 #define CGLTF_IMPLEMENTATION
+#define STB_IMAGE_IMPLEMENTATION
 #include "adgl.h"
 
-// todo: here we've included Mesh.h before Animation.h because Mesh.h
-// includes cgltf.h. if we also include it in Animtion.h then compiler
-// complains about multiple cgltf includes
-// we might want to centralise all code that deals with cgltf in a single source file
+#include "Shader.h"
+#include "Camera.h"
+#include "Texture.h"
 #include "Mesh.h"
 #include "Animation.h"
+#include "Point.h"
 
-#include "Camera.h"
-#include <vector>
-
-// todo(ad): should these be provided as globals?
+// todo: should these be provided as globals?
 // how should we deal with general window parameters?
 extern uint32_t WND_WIDTH;
 extern uint32_t WND_HEIGHT;
 
 static Camera camera = {};
 
-/** note(ad):
+/** note:
  * we might want to find a proper way to handle
  * assets down the road if this becomes a problem
  */

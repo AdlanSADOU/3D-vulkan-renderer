@@ -3,7 +3,6 @@
     Matrix * Vector operator
     Ortho projection
 */
-#pragma once
 
 #include <math.h>
 

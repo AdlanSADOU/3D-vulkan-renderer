@@ -1,5 +1,3 @@
-#if !defined(SHADER_H)
-#define SHADER_H
 #pragma once
 
 #include <GL/glew.h>
@@ -19,7 +17,7 @@
 struct Shader
 {
     uint32_t programID = {};
-    char *   sourcePath {};
+    char    *sourcePath {};
 };
 
 static void ShaderDestroy(Shader *shader)
@@ -60,19 +58,19 @@ static Shader *LoadShader(const char *sourcePath)
     long fsize = ftell(f);
     fseek(f, 0, SEEK_SET);
 
-    char *sourceCode = (char *)malloc(fsize + 1);
+    char *sourceCode = (char *)malloc(fsize);
+    assert(sourceCode);
     fread(sourceCode, fsize, 1, f);
-
     fclose(f);
-    sourceCode[fsize] = 0;
+    // sourceCode[fsize] = 0;
 
 
 
 
 
     /**
-    * Parsing the combined vertex/frag shader
-    */
+     * Parsing the combined vertex/frag shader
+     */
 #define V_START "#VERT_START"
 #define V_END   "#VERT_END"
 #define F_START "#FRAG_START"
@@ -90,6 +88,11 @@ static Shader *LoadShader(const char *sourcePath)
     char *fragSource;
     vertSource = (char *)malloc(sizeof(char) * vertSourceSize + 1);
     fragSource = (char *)malloc(sizeof(char) * fragSourceSize + 1);
+
+    if (!vertSource || !fragSource) {
+        SDL_Log("Failed to allocate space for vertex or fragment source");
+        return NULL;
+    }
 
     strncpy(vertSource, sourceCode + vertStartPos + strlen(V_START), vertSourceSize);
     strncpy(fragSource, sourceCode + fragStartPos + strlen(F_START), fragSourceSize);
@@ -144,6 +147,10 @@ static Shader *LoadShader(const char *sourcePath)
 
     Shader *s;
     s = (Shader *)malloc(sizeof(Shader));
+    if (!s) {
+        SDL_Log("Failed to allocate Shader* : not enough memory");
+        return s;
+    }
 
     s->programID = glCreateProgram();
     glAttachShader(s->programID, vertID);
@@ -155,7 +162,7 @@ static Shader *LoadShader(const char *sourcePath)
     glGetProgramiv(s->programID, GL_LINK_STATUS, &success);
     if (!success) {
         glGetProgramInfoLog(s->programID, 512, NULL, infoLog);
-        SDL_Log("%s : Failed to link shaders: %s\n", infoLog);
+        SDL_Log("%s : Failed to link shaders: %s\n", infoLog, sourcePath);
         free(s);
         return NULL;
     }
@@ -194,5 +201,3 @@ void SetUniformMatrix4Name(const char *name, const Matrix4 matrix, uint32_t prog
     GLint location = GetUniformLocation(name, programID);
     glUniformMatrix4fv(location, 1, GL_FALSE, matrix.m);
 }
-
-#endif // SHADER_H
