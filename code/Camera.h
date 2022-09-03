@@ -47,23 +47,15 @@ void Camera::CameraCreate(glm::vec3 position, float fov, float aspect, float nea
 void Camera::CameraUpdate(Input &input, float dt)
 {
 
-    if (input.up) {
-        _position += _speed * _forward * dt;
-    }
-    if (input.down) {
-        _position -= _speed * _forward * dt;
-    }
-    if (input.left) {
-        _position -= _speed * glm::normalize(glm::cross(_forward, _up)) * dt;
-    }
-    if (input.right) {
-        _position += _speed * glm::normalize(glm::cross(_forward, _up)) * dt;
-    }
+    if (input.up) _position += _speed * _forward * dt;
+    if (input.down) _position -= _speed * _forward * dt;
+    if (input.left) _position -= _speed * glm::normalize(glm::cross(_forward, _up)) * dt;
+    if (input.right) _position += _speed * glm::normalize(glm::cross(_forward, _up)) * dt;
 
     float factor = 0;
-    if (input.E) factor += .15f;
-    if (input.Q) factor -= .15f;
-    _position.y += factor;
+    if (input.E) factor += 1.f;
+    if (input.Q) factor -= 1.f;
+    _position.y += factor * dt /_sensitivity;
 
     static float xrelPrev = 0;
     static float yrelPrev = 0;
@@ -75,16 +67,15 @@ void Camera::CameraUpdate(Input &input, float dt)
         SDL_SetRelativeMouseMode(SDL_TRUE);
         // printVec("rel", {(float)xrel, (float)yrel, 0});
 
-        if (xrelPrev != xrel) _yaw += (float)xrel  * _sensitivity ;
-        if (yrelPrev != yrel) _pitch -= (float)yrel  * _sensitivity ;
+        if (xrelPrev != xrel) _yaw += (float)xrel * _sensitivity;
+        if (yrelPrev != yrel) _pitch -= (float)yrel * _sensitivity;
     } else
         SDL_SetRelativeMouseMode(SDL_FALSE);
 
-
-    _forward.x = cosf(Radians(_yaw)) * cosf(Radians(_pitch)) * dt;
-    _forward.y = sinf(Radians(_pitch)) * dt;
-    _forward.z = sinf(Radians(_yaw)) * cosf(Radians(_pitch)) * dt;
-    _forward   = glm::normalize(_forward);
+    _forward.x = cosf(Radians(_yaw)) * cosf(Radians(_pitch));
+    _forward.y = sinf(Radians(_pitch));
+    _forward.z = sinf(Radians(_yaw)) * cosf(Radians(_pitch));
+    _forward   = glm::normalize(_forward * dt);
     xrelPrev   = xrel;
     yrelPrev   = yrel;
 
