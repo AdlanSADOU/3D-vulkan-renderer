@@ -19,7 +19,7 @@ struct Camera
     float     _near        = {};
     float     _far         = {};
     float     _speed       = 20.f;
-    float     _sensitivity = 446.f;
+    float     _sensitivity = .046f;
 
 
     void CameraCreate(glm::vec3 position, float fov, float aspect, float near, float far);
@@ -75,15 +75,15 @@ void Camera::CameraUpdate(Input &input, float dt)
         SDL_SetRelativeMouseMode(SDL_TRUE);
         // printVec("rel", {(float)xrel, (float)yrel, 0});
 
-        if (xrelPrev != xrel) _yaw += (float)xrel  * _sensitivity * dt;
-        if (yrelPrev != yrel) _pitch -= (float)yrel  * _sensitivity * dt;
+        if (xrelPrev != xrel) _yaw += (float)xrel  * _sensitivity ;
+        if (yrelPrev != yrel) _pitch -= (float)yrel  * _sensitivity ;
     } else
         SDL_SetRelativeMouseMode(SDL_FALSE);
 
 
-    _forward.x = cosf(Radians(_yaw)) * cosf(Radians(_pitch));
-    _forward.y = sinf(Radians(_pitch));
-    _forward.z = sinf(Radians(_yaw)) * cosf(Radians(_pitch));
+    _forward.x = cosf(Radians(_yaw)) * cosf(Radians(_pitch)) * dt;
+    _forward.y = sinf(Radians(_pitch)) * dt;
+    _forward.z = sinf(Radians(_yaw)) * cosf(Radians(_pitch)) * dt;
     _forward   = glm::normalize(_forward);
     xrelPrev   = xrel;
     yrelPrev   = yrel;
