@@ -29,7 +29,7 @@ struct Input;
 void Example3DInit();
 void Example3DUpdateDraw(float dt, Input input);
 
-#define VSYNC 0
+#define VSYNC 1
 
 struct Input
 {
@@ -118,8 +118,7 @@ extern int main(int argc, char **argv)
     // InitSpaceShooter();
 
 
-    uint64_t start                = SDL_GetPerformanceCounter();
-    uint64_t lastCounter          = 0;
+    uint64_t lastCounter   = 0;
     uint64_t perfFrequency = SDL_GetPerformanceFrequency();
 
     while (g_running) {
@@ -194,11 +193,6 @@ extern int main(int argc, char **argv)
 
         float startTicks = SDL_GetTicks();
 
-        static float acc = 0;
-        if ((acc += dt_averaged) > 1) {
-            SDL_SetWindowTitle(window, (std::to_string(1 / dt_averaged).c_str()));
-            acc = 0;
-        }
 
         glClearColor(.1f, .1f, .1f, 1.f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -209,19 +203,30 @@ extern int main(int argc, char **argv)
 
         SDL_GL_SwapWindow(window);
 
-        uint64_t end = SDL_GetPerformanceCounter();
 
-        static uint64_t idx                = 0;
-        dt_samples[idx++ % MAX_DT_SAMPLES] = (end - lastCounter) / (float)perfFrequency;
 
-        float sum = 0;
+
+
+        uint64_t        endCounter = SDL_GetPerformanceCounter();
+        static uint64_t idx        = 0;
+        uint64_t        timeDelta  = (endCounter - lastCounter);
+        int32_t         msPerFrame = (int32_t)(((1000 * timeDelta) / perfFrequency));
+        float           sum        = 0;
+
+        dt_samples[idx++ % MAX_DT_SAMPLES] = timeDelta / (float)perfFrequency;
         for (uint64_t i = 0; i < MAX_DT_SAMPLES; i++) {
             sum += dt_samples[i];
         }
-
         dt_averaged = sum / MAX_DT_SAMPLES;
 
-        lastCounter = end;
+        static float acc = 0;
+        if ((acc += dt_averaged) > 1) {
+            static char buffer[256];
+            sprintf(buffer, "%1.f fps | %dms | %fs", 1.f / dt_averaged, msPerFrame, 1.f / msPerFrame);
+            SDL_SetWindowTitle(window, buffer);
+            acc = 0;
+        }
+        lastCounter = endCounter;
     }
 
     SDL_GL_DeleteContext(glcontext);
