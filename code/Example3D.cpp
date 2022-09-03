@@ -1,45 +1,3 @@
-/*TODO
-    Adding materials to Model: the way we are currently handling this
-    is quite... meh. Dont pre-size the Model._submeshMaterials
-    it's too error prone.
-    Instead do Model._submeshMaterials.push_back()
-
-    [Suggestions]:
-        - global asset hash maps ?
-            each time a model is created, the global Meshes hash table will be checked
-            if no entry for that model, it'll create one
-
-
-    ---------------------------ANIMATION STUFF-------------------------
-    - how to find the root joint? :
-        the root joint is the last element in the data->nodes[] array
-
-    - each joint has a matrix called inverseBindMatrix
-            transforms vertices into the local space of the joint
-
-    - "each joint node may have a local tranform and an array of children"
-    - "the bones of the skeleton are given implicitly, as the connections between the joints"
-
-    - JOINTS_0 & WEIGHTS_0 refer to an accessor
-        JOINTS_0 contains the indices of the joints affecting the vertex: 8bit vec4(j0, j1, j2, j3)
-        WIGHTS_0 defines the weights: vec4(w0, w1, w2, w3)
-        from these informations the "Skinning Matrix" can be computed
-            see "Computing the skinning matrix"
-
-    - reading:
-        - https://gamemath.com/book/multiplespaces.html
-        - https://computergraphics.stackexchange.com/questions/7603/confusion-about-how-inverse-bind-pose-is-actually-calculated-and-used#:~:text=The%20inverse%20bind%20pose%2C%20which,*%20v%2C%20which%20makes%20sense.
-        - https://www.khronos.org/opengl/wiki/Skeletal_Animation
-        - https://www.freecodecamp.org/news/advanced-opengl-animation-technique-skeletal-animations/
-        - https://moddb.fandom.com/wiki/OpenGL:Tutorials:Basic_Bones_System#How_does_a_bone_system_work?
-        // https://www.gamedev.net/forums/topic/706777-optimizing-skeletal-animation-system/
-*/
-
-
-// https://github.com/KhronosGroup/glTF-Tutorials/blob/master/gltfTutorial/gltfTutorial_004_ScenesNodes.md
-// https://kcoley.github.io/glTF/specification/2.0/figures/gltfOverview-2.0.0a.png
-// https://www.khronos.org/files/gltf20-reference-guide.pdf
-// https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html
 #define CGLTF_IMPLEMENTATION
 #define STB_IMAGE_IMPLEMENTATION
 #include "adgl.h"
@@ -108,6 +66,7 @@ void Example3DInit()
 
 
     entities.resize(3);
+
 
     entities[0].model.Create(path.c_str());
     entities[0].model._meshes[0]._materials[0] = gMaterials["mileMaterial"];
