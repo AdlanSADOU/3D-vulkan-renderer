@@ -1,6 +1,5 @@
 #pragma once
 
-#include <GLM/glm.hpp>
 
 // camera
 struct Camera
@@ -20,7 +19,7 @@ struct Camera
     float     _near        = {};
     float     _far         = {};
     float     _speed       = 20.f;
-    float     _sensitivity = 0.46f;
+    float     _sensitivity = 446.f;
 
 
     void CameraCreate(glm::vec3 position, float fov, float aspect, float near, float far);
@@ -76,10 +75,8 @@ void Camera::CameraUpdate(Input &input, float dt)
         SDL_SetRelativeMouseMode(SDL_TRUE);
         // printVec("rel", {(float)xrel, (float)yrel, 0});
 
-        if (xrelPrev != xrel)
-            _yaw += xrel * .1f * _sensitivity;
-        if (xrelPrev != xrel)
-            _pitch -= yrel * .1f * _sensitivity;
+        if (xrelPrev != xrel) _yaw += (float)xrel  * _sensitivity * dt;
+        if (yrelPrev != yrel) _pitch -= (float)yrel  * _sensitivity * dt;
     } else
         SDL_SetRelativeMouseMode(SDL_FALSE);
 
@@ -88,8 +85,8 @@ void Camera::CameraUpdate(Input &input, float dt)
     _forward.y = sinf(Radians(_pitch));
     _forward.z = sinf(Radians(_yaw)) * cosf(Radians(_pitch));
     _forward   = glm::normalize(_forward);
-    xrelPrev  = xrel;
-    yrelPrev  = yrel;
+    xrelPrev   = xrel;
+    yrelPrev   = yrel;
 
     _at         = _position + _forward;
     _projection = glm::perspective(_fov, _aspect, _near, _far);
