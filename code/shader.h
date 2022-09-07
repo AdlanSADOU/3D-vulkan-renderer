@@ -184,18 +184,23 @@ void UnuseProgram()
     glUseProgram(0);
 }
 
-static GLint GetUniformLocation(const char *name, uint32_t programID)
+static GLint GetUniformLocation(const char *name, GLuint programID)
 {
     return glGetUniformLocation(programID, name);
 }
 
-void ShaderSetMat4ByName(const char *name, glm::mat4 matrix, uint32_t programID)
+void ShaderSetMat4ByName(const char *name, glm::mat4 matrix, GLuint programID)
 {
     GLint location = GetUniformLocation(name, programID);
     glUniformMatrix4fv(location, 1, GL_FALSE, glm::value_ptr(matrix));
 }
+void ShaderSetMat4ByName(const char *name, glm::mat4 &matrix, GLsizei count, GLuint programID)
+{
+    GLint location = GetUniformLocation(name, programID);
+    glUniformMatrix4fv(location, count, GL_FALSE, glm::value_ptr(matrix));
+}
 
-void SetUniformMatrix4Name(const char *name, const Matrix4 matrix, uint32_t programID)
+void SetUniformMatrix4Name(const char *name, const Matrix4 matrix, GLuint programID)
 {
     // we could just hardcode locations to avoid querrying for names each frame..
     GLint location = GetUniformLocation(name, programID);

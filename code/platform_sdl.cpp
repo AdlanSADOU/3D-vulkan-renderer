@@ -56,7 +56,7 @@ bool g_running = true;
 
 const uint64_t MAX_DT_SAMPLES             = 1;
 float          dt_samples[MAX_DT_SAMPLES] = {};
-float          dt_averaged                = 0;
+float          dt                         = 0;
 
 // note(ad): if we want to make this into a "framework"
 // we must provide init and shutdown
@@ -118,8 +118,9 @@ extern int main(int argc, char **argv)
     // InitSpaceShooter();
 
 
-    uint64_t lastCounter   = 0;
-    uint64_t perfFrequency = SDL_GetPerformanceFrequency();
+    uint64_t lastCycleCount = __rdtsc();
+    uint64_t lastCounter    = SDL_GetPerformanceCounter();
+    uint64_t perfFrequency  = SDL_GetPerformanceFrequency();
 
     while (g_running) {
 
@@ -196,37 +197,41 @@ extern int main(int argc, char **argv)
 
         glClearColor(.1f, .1f, .1f, 1.f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-        // ExampleSpriteUpdateDraw(dt_averaged, input);
-        Example3DUpdateDraw(dt_averaged, input);
-        // UpdateDrawSpaceShooter(dt_averaged, input);
-
+        // ExampleSpriteUpdateDraw(dt, input);
+        Example3DUpdateDraw(dt, input);
+        // UpdateDrawSpaceShooter(dt, input);
         SDL_GL_SwapWindow(window);
 
 
 
 
 
-        uint64_t        endCounter = SDL_GetPerformanceCounter();
-        static uint64_t idx        = 0;
-        uint64_t        timeDelta  = (endCounter - lastCounter);
-        int32_t         msPerFrame = (int32_t)(((1000 * timeDelta) / perfFrequency));
-        float           sum        = 0;
+        uint64_t endCounter = SDL_GetPerformanceCounter();
+        uint64_t frameDelta = endCounter - lastCounter;
 
-        dt_samples[idx++ % MAX_DT_SAMPLES] = timeDelta / (float)perfFrequency;
-        for (uint64_t i = 0; i < MAX_DT_SAMPLES; i++) {
-            sum += dt_samples[i];
-        }
-        dt_averaged = sum / MAX_DT_SAMPLES;
+        dt = frameDelta / (float)perfFrequency;
+
+
+        uint64_t endCycleCount   = __rdtsc();
+        uint64_t cycleDelta      = endCycleCount - lastCycleCount;
+        float    MCyclesPerFrame = (float)(cycleDelta / (float)(1000 * 1000));
+        lastCounter              = endCounter;
+        lastCycleCount           = endCycleCount;
+
+
 
         static float acc = 0;
-        if ((acc += dt_averaged) > 1) {
+        if ((acc += dt) > 1) {
             static char buffer[256];
-            sprintf(buffer, "%1.f fps | %dms | %fs", 1.f / dt_averaged, msPerFrame, 1.f / msPerFrame);
+            sprintf_s(buffer, sizeof(buffer), "%.2f fps | %.2f ms | %.2f MCycles | CPU: %.2f Mhz",
+                1 / dt,
+                dt * 1000,
+                MCyclesPerFrame,
+                MCyclesPerFrame / dt);
+
             SDL_SetWindowTitle(window, buffer);
             acc = 0;
         }
-        lastCounter = endCounter;
     }
 
     SDL_GL_DeleteContext(glcontext);

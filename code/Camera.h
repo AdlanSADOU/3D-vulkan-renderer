@@ -47,15 +47,15 @@ void Camera::CameraCreate(glm::vec3 position, float fov, float aspect, float nea
 void Camera::CameraUpdate(Input &input, float dt)
 {
 
-    if (input.up) _position += _speed * _forward * dt;
-    if (input.down) _position -= _speed * _forward * dt;
-    if (input.left) _position -= _speed * glm::normalize(glm::cross(_forward, _up)) * dt;
-    if (input.right) _position += _speed * glm::normalize(glm::cross(_forward, _up)) * dt;
+    if (input.up) _position += _forward * _speed * dt;
+    if (input.down) _position -= _forward * _speed * dt;
+    if (input.left) _position -= glm::normalize(glm::cross(_forward, _up)) * _speed * dt;
+    if (input.right) _position += glm::normalize(glm::cross(_forward, _up)) * _speed * dt;
 
     float factor = 0;
     if (input.E) factor += 1.f;
     if (input.Q) factor -= 1.f;
-    _position.y += factor * dt /_sensitivity;
+    _position.y += factor * dt / _sensitivity;
 
     static float xrelPrev = 0;
     static float yrelPrev = 0;
@@ -65,7 +65,6 @@ void Camera::CameraUpdate(Input &input, float dt)
     SDL_GetRelativeMouseState(&xrel, &yrel);
     if (input.mouse.right) {
         SDL_SetRelativeMouseMode(SDL_TRUE);
-        // printVec("rel", {(float)xrel, (float)yrel, 0});
 
         if (xrelPrev != xrel) _yaw += (float)xrel * _sensitivity;
         if (yrelPrev != yrel) _pitch -= (float)yrel * _sensitivity;
@@ -75,7 +74,7 @@ void Camera::CameraUpdate(Input &input, float dt)
     _forward.x = cosf(Radians(_yaw)) * cosf(Radians(_pitch));
     _forward.y = sinf(Radians(_pitch));
     _forward.z = sinf(Radians(_yaw)) * cosf(Radians(_pitch));
-    _forward   = glm::normalize(_forward * dt);
+    _forward   = glm::normalize(_forward);
     xrelPrev   = xrel;
     yrelPrev   = yrel;
 

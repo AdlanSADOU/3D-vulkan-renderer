@@ -1,3 +1,11 @@
+
+9/1/2022
+Flexibility vs performance/processing time tradeoff.
+The rendering system uses cached glTF asset's binary blobs
+as is. no processing needed.
+
+
+
 9/3/2022
 I never really felt comfortable in how I managed header files until now.
 Given that I've been programming for 5+ years.

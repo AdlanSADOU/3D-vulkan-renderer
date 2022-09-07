@@ -16,6 +16,7 @@
 #include <SDL2/SDL.h>
 #include <GL/glew.h>
 #include <GLM/glm.hpp>
+#include <GLM/gtc/matrix_transform.hpp>
 #include <stb_image.h>
 #include <cgltf.h>
 
@@ -30,7 +31,7 @@ static std::unordered_map<std::string, Texture *>  gTextures;
 static std::unordered_map<std::string, Material *> gMaterials;
 
 
-#define ARR_COUNT(arr) (sizeof(arr) / sizeof(arr[0]))
+#define NB_OF_ELEMENTS_IN_ARRAY(arr) (sizeof(arr) / sizeof(arr[0]))
 
 static void printVec(const char *name, glm::vec3 v)
 {
@@ -39,10 +40,26 @@ static void printVec(const char *name, glm::vec3 v)
 
 struct Transform
 {
-    glm::vec3 scale       = {};
-    glm::vec3 rotation    = {};
-    glm::vec3 translation = {};
+    Transform *parent      = {};
+    float      scale       = {};
+    glm::vec3  rotation    = {};
+    glm::vec3  translation = {};
+    glm::mat4  GetMatrix();
 };
+
+glm::mat4 Transform::GetMatrix()
+{
+    glm::mat4 m = glm::mat4(1);
+
+    m = glm::translate(glm::mat4(1), translation)
+        * glm::rotate(glm::mat4(1), rotation.x, glm::vec3(1, 0, 0))
+        * glm::rotate(glm::mat4(1), rotation.y, glm::vec3(0, 1, 0))
+        * glm::rotate(glm::mat4(1), rotation.z, glm::vec3(0, 0, 1))
+        * glm::scale(glm::mat4(1), glm::vec3(scale));
+
+    return m;
+}
+
 
 struct Input
 {

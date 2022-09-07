@@ -10,19 +10,14 @@ struct Vertex
     glm::vec4 weights;
 };
 
-struct VertexSOA
-{
-    glm::vec3 *position;
-    glm::vec3 *normal;
-    glm::vec2 *texCoord;
-    glm::vec4 *joints;
-    glm::vec4 *weights;
-};
-
 static float triangle_verts[] = {
     -0.5f, -0.5f, -0.5f,
     0.5f, -0.5f, -0.5f,
     0.0f, 0.5f, -0.5f
+};
+
+static uint16_t triangle_indices[] = {
+    0, 1, 2
 };
 
 static std::vector<Vertex> cube_verts = {
@@ -57,10 +52,6 @@ static std::vector<uint16_t> cube_indices = {
     // top
     3, 2, 6,
     6, 7, 3
-};
-
-static uint16_t triangle_indices[] = {
-    0, 1, 2
 };
 
 
@@ -105,9 +96,6 @@ struct Mesh
     std::vector<std::vector<uint16_t>> _submeshIndices;
     std::vector<std::vector<Texture>>  _subTextures;
 
-    VertexSOA vertices;
-    uint16_t *indices;
-    Texture  *textures;
 
 
     std::vector<uint32_t> _VAOs;
@@ -249,6 +237,7 @@ struct Mesh2
 
 struct Model2
 {
+    cgltf_data        *_data         = {};
     std::vector<Mesh2> _meshes       = {};
     uint32_t           _DataBufferID = {};
     Transform          _transform    = {};
@@ -267,21 +256,20 @@ void Model2::Create(const char *path)
     // instance of this in memory. So, instead of giving a path
     // make entries into a hash table
     cgltf_options options = {};
-    cgltf_data   *data    = NULL;
-    cgltf_result  result  = cgltf_parse_file(&options, path, &data);
+    cgltf_result  result  = cgltf_parse_file(&options, path, &_data);
 
-    if (cgltf_parse_file(&options, path, &data) == cgltf_result_success) {
-        if (cgltf_load_buffers(&options, data, path) == cgltf_result_success) {
-            if ((result = cgltf_validate(data)) != cgltf_result_success) {
+    if (cgltf_parse_file(&options, path, &_data) == cgltf_result_success) {
+        if (cgltf_load_buffers(&options, _data, path) == cgltf_result_success) {
+            if ((result = cgltf_validate(_data)) != cgltf_result_success) {
                 SDL_Log("cgltf validation error");
                 return;
             }
-            if (data->meshes_count == 0) {
+            if (_data->meshes_count == 0) {
                 // todo: make this format into a LOG_ERROR() macro
                 SDL_Log("%s:%d: no meshes found...", __FILE__, __LINE__);
                 return;
             }
-            result = cgltf_load_buffers(&options, data, path);
+            result = cgltf_load_buffers(&options, _data, path);
         }
     }
 
@@ -289,11 +277,11 @@ void Model2::Create(const char *path)
 
 
 
-    _meshes.resize(data->meshes_count);
-    for (size_t mesh_idx = 0; mesh_idx < data->meshes_count; mesh_idx++) {
-        cgltf_primitive *primitives = data->meshes[mesh_idx].primitives;
+    _meshes.resize(_data->meshes_count);
+    for (size_t mesh_idx = 0; mesh_idx < _data->meshes_count; mesh_idx++) {
+        cgltf_primitive *primitives = _data->meshes[mesh_idx].primitives;
 
-        size_t submeshCount = data->meshes[mesh_idx].primitives_count;
+        size_t submeshCount = _data->meshes[mesh_idx].primitives_count;
         _meshes[mesh_idx]._VAOs.resize(submeshCount);
         _meshes[mesh_idx]._indicesCount.resize(submeshCount);
         _meshes[mesh_idx]._indicesOffsets.resize(submeshCount);
@@ -332,7 +320,7 @@ void Model2::Create(const char *path)
             glBindBuffer(GL_ARRAY_BUFFER, _DataBufferID);
             glBindVertexArray(_meshes[mesh_idx]._VAOs[submesh_idx]);
 
-            for (size_t attrib_idx = 0; attrib_idx < data->meshes->primitives->attributes_count; attrib_idx++) {
+            for (size_t attrib_idx = 0; attrib_idx < _data->meshes->primitives->attributes_count; attrib_idx++) {
                 cgltf_attribute   *attrib = primitives[submesh_idx].attributes + attrib_idx;
                 cgltf_buffer_view *view   = attrib->data->buffer_view;
 
@@ -348,8 +336,10 @@ void Model2::Create(const char *path)
                     glEnableVertexAttribArray(2);
                     glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 0, (void *)view->offset);
                 } else if (attrib->type == cgltf_attribute_type_joints) {
+                    glm::vec4 *w = (glm::vec4*)((char *)view->buffer->data + view->offset);
+                    // SDL_Log("weight:[%d, %d, %d, %d]", w.x, w.y, w.z, w.w);
                     glEnableVertexAttribArray(3);
-                    glVertexAttribPointer(3, 4, GL_FLOAT, GL_FALSE, 0, (void *)view->offset);
+                    glVertexAttribPointer(3, 4, GL_UNSIGNED_BYTE, GL_FALSE, 0, (void *)view->offset);
                 } else if (attrib->type == cgltf_attribute_type_weights) {
                     glEnableVertexAttribArray(4);
                     glVertexAttribPointer(4, 4, GL_FLOAT, GL_FALSE, 0, (void *)view->offset);
