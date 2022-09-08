@@ -271,6 +271,8 @@ void Model2::Create(const char *path)
             }
             result = cgltf_load_buffers(&options, _data, path);
         }
+    } else {
+        SDL_Log("Failed to load [%s]", path);
     }
 
 
@@ -336,7 +338,7 @@ void Model2::Create(const char *path)
                     glEnableVertexAttribArray(2);
                     glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 0, (void *)view->offset);
                 } else if (attrib->type == cgltf_attribute_type_joints) {
-                    glm::vec4 *w = (glm::vec4*)((char *)view->buffer->data + view->offset);
+                    glm::vec4 *w = (glm::vec4 *)((char *)view->buffer->data + view->offset);
                     // SDL_Log("weight:[%d, %d, %d, %d]", w.x, w.y, w.z, w.w);
                     glEnableVertexAttribArray(3);
                     glVertexAttribPointer(3, 4, GL_UNSIGNED_BYTE, GL_FALSE, 0, (void *)view->offset);

@@ -40,26 +40,51 @@ static void printVec(const char *name, glm::vec3 v)
 
 struct Transform
 {
-    Transform *parent      = {};
-    float      scale       = {};
-    glm::vec3  rotation    = {};
-    glm::vec3  translation = {};
-    glm::mat4  GetMatrix();
+    const char *name        = {};
+    Transform  *parent      = {};
+    Transform  *child       = {};
+    float       scale       = {};
+    glm::vec3   rotation    = {};
+    glm::vec3   translation = {};
+    glm::mat4   GetLocalMatrix();
+    glm::mat4   ComputeGlobalMatrix();
 };
 
-glm::mat4 Transform::GetMatrix()
+glm::mat4 Transform::GetLocalMatrix()
 {
     glm::mat4 m = glm::mat4(1);
 
     m = glm::translate(glm::mat4(1), translation)
-        * glm::rotate(glm::mat4(1), rotation.x, glm::vec3(1, 0, 0))
-        * glm::rotate(glm::mat4(1), rotation.y, glm::vec3(0, 1, 0))
         * glm::rotate(glm::mat4(1), rotation.z, glm::vec3(0, 0, 1))
+        * glm::rotate(glm::mat4(1), rotation.y, glm::vec3(0, 1, 0))
+        * glm::rotate(glm::mat4(1), rotation.x, glm::vec3(1, 0, 0))
         * glm::scale(glm::mat4(1), glm::vec3(scale));
 
     return m;
 }
 
+glm::mat4 Transform::ComputeGlobalMatrix()
+{
+    if (!parent) return GetLocalMatrix();
+
+    glm::mat4  globalMatrix = glm::mat4(1);
+    Transform *tmp          = this;
+
+    // ummm... yeah, this will be changed eventually
+    // it's the first iterative solution I came up with..
+    std::list<Transform *> hierarchy;
+    while (tmp->parent) {
+        tmp = tmp->parent;
+        hierarchy.push_front(tmp);
+    }
+
+    for (auto &&i : hierarchy) {
+        globalMatrix *= i->GetLocalMatrix();
+    }
+    globalMatrix *= this->GetLocalMatrix();
+
+    return globalMatrix;
+}
 
 struct Input
 {

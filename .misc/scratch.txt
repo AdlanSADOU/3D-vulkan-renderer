@@ -28,7 +28,6 @@
 
     - reading:
         - https://gamemath.com/book/multiplespaces.html
-        - https://computergraphics.stackexchange.com/questions/7603/confusion-about-how-inverse-bind-pose-is-actually-calculated-and-used#:~:text=The%20inverse%20bind%20pose%2C%20which,*%20v%2C%20which%20makes%20sense.
         - https://www.khronos.org/opengl/wiki/Skeletal_Animation
         - https://www.freecodecamp.org/news/advanced-opengl-animation-technique-skeletal-animations/
         - https://moddb.fandom.com/wiki/OpenGL:Tutorials:Basic_Bones_System#How_does_a_bone_system_work?

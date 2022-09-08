@@ -24,8 +24,8 @@ void main()
     mat4 skinMatrix =
     vWeights.x * jointMatrices[uint(vJoints.x)]+
     vWeights.y * jointMatrices[uint(vJoints.y)]+
-    vWeights.z * jointMatrices[uint(vJoints.z)]+
-    vWeights.w * jointMatrices[uint(vJoints.w)];
+    vWeights.z * jointMatrices[uint(vJoints.z)];
+    (1-vWeights.x-vWeights.y-vWeights.z) * jointMatrices[uint(vJoints.w)];
 
     gl_Position = modelViewProj * skinMatrix * vec4(vPos, 1.0f);
     texCoord = vTex;

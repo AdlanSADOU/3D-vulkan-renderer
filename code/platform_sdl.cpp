@@ -195,7 +195,7 @@ extern int main(int argc, char **argv)
         float startTicks = SDL_GetTicks();
 
 
-        glClearColor(.1f, .1f, .1f, 1.f);
+        glClearColor(.3f, .3f, .4, 1.f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         // ExampleSpriteUpdateDraw(dt, input);
         Example3DUpdateDraw(dt, input);

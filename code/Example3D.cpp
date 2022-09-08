@@ -69,25 +69,25 @@ void Example3DInit()
     std::string path = "assets/" + char05Milestone;
 
 
-    testRig.model.Create("assets/animated_block.gltf");
-    testRig.model._meshes[0]._materials[0] = gMaterials["CesiumMan"];
+    // testRig.model.Create("assets/test_rig_2.gltf");
+    // testRig.model._meshes[0]._materials[0] = gMaterials["chibiMaterial"];
+    // testRig.model._transform.translation   = { 0.f, 0.f, -0.f };
+    // testRig.model._transform.rotation      = { 0.f, 0.f, 0.f };
+    // testRig.model._transform.scale         = 1.f;
+
+    testRig.model.Create("assets/AnimTest.gltf");
+    testRig.model._meshes[0]._materials[0] = gMaterials["chibiMaterial"];
     testRig.model._transform.translation   = { 0.f, 0.f, -6.f };
     testRig.model._transform.rotation      = { 0.f, 0.f, 0.f };
     testRig.model._transform.scale         = 1.f;
 
-    // testRig.model.Create("assets/AnimTest.gltf");
+
+    // testRig.model.Create("assets/test_rig_meta.gltf");
     // testRig.model._meshes[0]._materials[0] = gMaterials["chibiMaterial"];
-    // testRig.model._transform.translation   = { 0.f, 0.f, -6.f };
+    // testRig.model._transform.translation   = { 0.f, 0.f, 0.f };
     // testRig.model._transform.rotation      = { 0.f, 0.f, 0.f };
     // testRig.model._transform.scale         = 1.f;
-
-    ComputeLocalJointTransform(testRig.model._data);
-
-    // testRig.model.Create("assets/chibi_02_ex.gltf");
-    // testRig.model._meshes[0]._materials[0] = gMaterials["chibiMaterial"];
-    // testRig.model._transform.translation   = { 14.f, 0.f, -16.f };
-    // testRig.model._transform.rotation      = { 0.f, 0.f, 0.f };
-    // testRig.model._transform.scale         = 1.f;
+    ComputeLocalJointTransforms(testRig.model._data);
 
     // PrintAnimationClipTransformsByFrame(testRig.model._data, 15);
 
