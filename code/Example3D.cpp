@@ -5,8 +5,8 @@
 #include "Shader.h"
 #include "Camera.h"
 #include "Texture.h"
-#include "Mesh.h"
 #include "Animation.h"
+#include "Mesh.h"
 #include "Point.h"
 
 
@@ -53,7 +53,7 @@ void Example3DInit()
 
     gMaterials.insert({ "standard", MaterialCreate("shaders/point.shader", NULL) });
     gMaterials.insert({ "CesiumMan", MaterialCreate("shaders/standard.shader", gTextures["CesiumMan"]) });
-    gMaterials.insert({ "mileMaterial", MaterialCreate("shaders/standard.shader", gTextures["brick_wall"]) });
+    gMaterials.insert({ "mileMaterial", MaterialCreate("shaders/standard.shader", gTextures["ground"]) });
     gMaterials.insert({ "cubeMaterial", MaterialCreate("shaders/standard.shader", gTextures["cube"]) });
     gMaterials.insert({ "chibiMaterial", MaterialCreate("shaders/standard.shader", gTextures["cs_blend_red Base Color"]) });
     gMaterials.insert({ "groundMaterial", MaterialCreate("shaders/ground.shader", gTextures["ground"]) });
@@ -75,11 +75,11 @@ void Example3DInit()
     // testRig.model._transform.rotation      = { 0.f, 0.f, 0.f };
     // testRig.model._transform.scale         = 1.f;
 
-    testRig.model.Create("assets/AnimTest.gltf");
-    testRig.model._meshes[0]._materials[0] = gMaterials["chibiMaterial"];
+    testRig.model.Create("assets/capoera.gltf");
+    testRig.model._meshes[0]._materials[0] = gMaterials["mileMaterial"];
     testRig.model._transform.translation   = { 0.f, 0.f, -6.f };
     testRig.model._transform.rotation      = { 0.f, 0.f, 0.f };
-    testRig.model._transform.scale         = 1.f;
+    testRig.model._transform.scale         = .2f;
 
 
     // testRig.model.Create("assets/test_rig_meta.gltf");
@@ -150,28 +150,8 @@ void Example3DUpdateDraw(float dt, Input input)
     //
     // Entities
     //
-    glm::mat4 model = glm::mat4(1);
 
-    model = glm::translate(model, testRig.model._transform.translation)
-        * glm::rotate(model, (Radians(testRig.model._transform.rotation.x)), glm::vec3(1, 0, 0))
-        * glm::rotate(model, (Radians(testRig.model._transform.rotation.y)), glm::vec3(0, 1, 0))
-        * glm::rotate(model, (Radians(testRig.model._transform.rotation.z)), glm::vec3(0, 0, 1))
-        * glm::scale(model, glm::vec3(testRig.model._transform.scale));
-
-    Material *material = testRig.model._meshes[0]._materials[0];
-    ShaderUse(material->_shader->programID);
-    ShaderSetMat4ByName("projection", gCameraInUse->_projection, material->_shader->programID);
-    ShaderSetMat4ByName("view", gCameraInUse->_view, material->_shader->programID);
-    ShaderSetMat4ByName("model", model, material->_shader->programID);
-    ShaderSetMat4ByName("jointMatrices", jointMatrices[0], jointMatrices.size(), material->_shader->programID);
-
-    glBindTexture(GL_TEXTURE_2D, material->_texture->id);
-
-    glBindVertexArray(testRig.model._meshes[0]._VAOs[0]);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, testRig.model._DataBufferID);
-    glDrawElements(GL_TRIANGLES, testRig.model._meshes[0]._indicesCount[0], GL_UNSIGNED_SHORT, (void *)testRig.model._meshes[0]._indicesOffsets[0]);
-
-
+    testRig.model.Draw();
 
     for (size_t n = 0; n < entities.size(); n++) {
         for (int i = 0; i < entities[n].model._meshes.size(); i++) {

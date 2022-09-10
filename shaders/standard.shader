@@ -14,7 +14,7 @@ uniform mat4 projection;
 uniform mat4 view;
 uniform mat4 model;
 
-uniform mat4 jointMatrices[128];// might want to switch to SSBOs
+uniform mat4 finalPoseJointMatrices[128];// might want to switch to SSBOs
 
 void main()
 {
@@ -22,10 +22,10 @@ void main()
     mat4 modelViewProj = projection * view * model;
 
     mat4 skinMatrix =
-    vWeights.x * jointMatrices[uint(vJoints.x)]+
-    vWeights.y * jointMatrices[uint(vJoints.y)]+
-    vWeights.z * jointMatrices[uint(vJoints.z)];
-    (1-vWeights.x-vWeights.y-vWeights.z) * jointMatrices[uint(vJoints.w)];
+    vWeights.x * finalPoseJointMatrices[uint(vJoints.x)]+
+    vWeights.y * finalPoseJointMatrices[uint(vJoints.y)]+
+    vWeights.z * finalPoseJointMatrices[uint(vJoints.z)];
+    (1-vWeights.x-vWeights.y-vWeights.z) * finalPoseJointMatrices[uint(vJoints.w)];
 
     gl_Position = modelViewProj * skinMatrix * vec4(vPos, 1.0f);
     texCoord = vTex;
@@ -49,7 +49,7 @@ void main()
 {
     // FragColor = mix(texture(texSampler, texCoord), texture(texSampler1, texCoord), 0.2) * inColor;
     // FragColor = texture(texSampler, texCoord) * inColor;
-    FragColor = texture(texSampler, texCoord);
+    FragColor = texture(texSampler, texCoord) * vec4(.8, .3, .8, 1.0) * 3.f;
 }
 
 #FRAG_END

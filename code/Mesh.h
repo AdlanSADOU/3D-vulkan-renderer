@@ -239,8 +239,8 @@ struct Model2
 {
     cgltf_data        *_data         = {};
     std::vector<Mesh2> _meshes       = {};
-    uint32_t           _DataBufferID = {};
     Transform          _transform    = {};
+    uint32_t           _DataBufferID = {};
 
     void Create(const char *path);
     void Draw();
@@ -248,6 +248,30 @@ struct Model2
 
 void Model2::Draw()
 {
+    glm::mat4 model = glm::mat4(1);
+
+    model = glm::translate(model, _transform.translation)
+        * glm::rotate(model, (Radians(_transform.rotation.x)), glm::vec3(1, 0, 0))
+        * glm::rotate(model, (Radians(_transform.rotation.y)), glm::vec3(0, 1, 0))
+        * glm::rotate(model, (Radians(_transform.rotation.z)), glm::vec3(0, 0, 1))
+        * glm::scale(model, glm::vec3(_transform.scale));
+
+    Material *material = _meshes[0]._materials[0];
+    ShaderUse(material->_shader->programID);
+    ShaderSetMat4ByName("projection", gCameraInUse->_projection, material->_shader->programID);
+    ShaderSetMat4ByName("view", gCameraInUse->_view, material->_shader->programID);
+    ShaderSetMat4ByName("model", model, material->_shader->programID);
+    ShaderSetMat4ByName("finalPoseJointMatrices", finalPoseJointMatrices[0], finalPoseJointMatrices.size(), material->_shader->programID);
+
+    glBindTexture(GL_TEXTURE_2D, material->_texture->id);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, _DataBufferID);
+
+    for (size_t mesh_idx = 0; mesh_idx < this->_meshes.size(); mesh_idx++) {
+        for (size_t submesh_idx = 0; submesh_idx < this->_meshes.size(); submesh_idx++) {
+            glBindVertexArray(_meshes[mesh_idx]._VAOs[submesh_idx]);
+            glDrawElements(GL_TRIANGLES, _meshes[mesh_idx]._indicesCount[submesh_idx], GL_UNSIGNED_SHORT, (void *)_meshes[mesh_idx]._indicesOffsets[submesh_idx]);
+        }
+    }
 }
 
 void Model2::Create(const char *path)
@@ -276,9 +300,39 @@ void Model2::Create(const char *path)
     }
 
 
+    // todo: we do take yet take into account the exported model transform of the mesh
+
+    glGenBuffers(1, &_DataBufferID);
+    glBindBuffer(GL_ARRAY_BUFFER, _DataBufferID);
+
+
+    assert(_data->buffers_count == 1);
+    // note: currently we allocate more data on the GPU than we really need to render this mesh
+    // we allocate for the entire .bin which contains more stuff than just primitives & indices
+    size_t total_data_size_for_current_submesh = _data->buffers->size;
 
 
 
+    // for (size_t mesh_idx = 0; mesh_idx < _data->meshes_count; mesh_idx++) {
+    //     size_t           submeshCount = _data->meshes[mesh_idx].primitives_count;
+    //     cgltf_primitive *primitives   = _data->meshes[mesh_idx].primitives;
+    //     primitives->mappings->variant;
+    //     for (size_t submesh_idx = 0; submesh_idx < submeshCount; submesh_idx++) {
+
+    //         cgltf_primitive *primitive = primitives + submesh_idx;
+    //         for (size_t i = 0; i < primitive->attributes_count; i++) {
+    //             total_data_size_for_current_submesh += primitive->attributes[i].data->buffer_view->size;
+    //         }
+    //         total_data_size_for_current_submesh += primitive->indices->buffer_view->size;
+    //     }
+    // }
+    // note: if a model has multiple meshes, assuming that multiple meshes share the same data blob at different offsets
+    // this assert should then fire
+    // assert(total_data_size_for_current_submesh == primitives->attributes->data->buffer_view->buffer->size);
+    glBufferData(GL_ARRAY_BUFFER, total_data_size_for_current_submesh, 0, GL_DYNAMIC_DRAW);
+
+
+    size_t totalSize = 0;
     _meshes.resize(_data->meshes_count);
     for (size_t mesh_idx = 0; mesh_idx < _data->meshes_count; mesh_idx++) {
         cgltf_primitive *primitives = _data->meshes[mesh_idx].primitives;
@@ -290,44 +344,21 @@ void Model2::Create(const char *path)
         _meshes[mesh_idx]._materials.resize(submeshCount);
 
 
-        glGenBuffers(1, &_DataBufferID);
-        glBindBuffer(GL_ARRAY_BUFFER, _DataBufferID);
 
-
-
-
-        // get the total data size for this mesh: primitives + attributes
-        size_t total_data_size_for_current_submesh = 0;
-        for (size_t submesh_idx = 0; submesh_idx < submeshCount; submesh_idx++) {
-            cgltf_primitive *primitive = primitives + submesh_idx;
-            for (size_t i = 0; i < primitive->attributes_count; i++) {
-                total_data_size_for_current_submesh += primitive->attributes[i].data->buffer_view->size;
-            }
-            total_data_size_for_current_submesh += primitive->indices->buffer_view->size;
-        }
-        // note: if a model has multiple meshes, assuming that multiple meshes share the same data blob at different offsets
-        // this assert should then fire
-        // assert(total_data_size_for_current_submesh == primitives->attributes->data->buffer_view->buffer->size);
-
-
-
-
-
-        glBufferData(GL_ARRAY_BUFFER, total_data_size_for_current_submesh, 0, GL_DYNAMIC_DRAW);
-        glGenVertexArrays(submeshCount, &_meshes[mesh_idx]._VAOs[mesh_idx]);
+        glGenVertexArrays(submeshCount, &_meshes[mesh_idx]._VAOs[0]);
 
         for (size_t submesh_idx = 0; submesh_idx < submeshCount; submesh_idx++) {
             cgltf_primitive *primitive = primitives + submesh_idx;
 
-            glBindBuffer(GL_ARRAY_BUFFER, _DataBufferID);
             glBindVertexArray(_meshes[mesh_idx]._VAOs[submesh_idx]);
+            glBindBuffer(GL_ARRAY_BUFFER, _DataBufferID);
 
             for (size_t attrib_idx = 0; attrib_idx < _data->meshes->primitives->attributes_count; attrib_idx++) {
                 cgltf_attribute   *attrib = primitives[submesh_idx].attributes + attrib_idx;
                 cgltf_buffer_view *view   = attrib->data->buffer_view;
 
                 glBufferSubData(GL_ARRAY_BUFFER, view->offset, view->size, (void *)((uint8_t *)view->buffer->data + view->offset));
-
+                totalSize += view->size;
                 if (attrib->type == cgltf_attribute_type_position) {
                     glEnableVertexAttribArray(0);
                     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, (void *)view->offset);
@@ -347,7 +378,7 @@ void Model2::Create(const char *path)
                     glVertexAttribPointer(4, 4, GL_FLOAT, GL_FALSE, 0, (void *)view->offset);
                 }
             }
-
+            totalSize += primitive->indices->buffer_view->size;
             glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, _DataBufferID);
             glBufferSubData(GL_ELEMENT_ARRAY_BUFFER,
                 primitive->indices->buffer_view->offset,
@@ -358,8 +389,8 @@ void Model2::Create(const char *path)
             _meshes[mesh_idx]._indicesCount[submesh_idx]   = primitive->indices->count;
         }
 
-        glBindVertexArray(0);
-        glBindBuffer(GL_ARRAY_BUFFER, 0);
-        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+        // glBindVertexArray(0);
+        // glBindBuffer(GL_ARRAY_BUFFER, 0);
+        // glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
     }
 }

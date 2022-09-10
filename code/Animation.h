@@ -35,51 +35,10 @@ struct AnimationClip
     std::vector<AnimatedJoint> joints;
 };
 
-static cgltf_data *LoadGltfData(const char *skeletonPath)
-{
-    cgltf_options opts {};
-    cgltf_data   *data {};
-    cgltf_result  res {};
 
-    if (cgltf_parse_file(&opts, skeletonPath, &data) == cgltf_result_success) {
-        if (cgltf_load_buffers(&opts, data, skeletonPath) == cgltf_result_success) {
-            if ((res = cgltf_validate(data)) != cgltf_result_success) {
-                SDL_Log("cgltf validation error");
-            }
-        }
-    }
-
-    assert(data);
-    return data;
-}
-
-
-
-// should we interpolate and cache sampler ouputs
-// into poses we can use?
-
-static float *GetAnimatedPropertyChannelAtFrame(uint32_t atFrame, cgltf_animation_channel *channel, cgltf_animation_path_type property, float *outTime = NULL)
-{
-    cgltf_accessor *input          = channel->sampler->input;
-    cgltf_accessor *output         = channel->sampler->output;
-    uint32_t        componentCount = (output->buffer_view->size / output->count / cgltf_component_size(output->component_type));
-    float          *values         = ((float *)((uint8_t *)channel->sampler->output->buffer_view->buffer->data + channel->sampler->output->buffer_view->offset));
-    float          *timeValues     = (float *)((uint8_t *)input->buffer_view->buffer->data + input->buffer_view->offset);
-
-    // note: we could even avoid iterating, because we know what frame we want
-    // we just have to be carefull and check if the frame exists
-    for (size_t frames = 0; frames < input->count; frames++) {
-        float    time  = timeValues[frames];
-        uint32_t frame = time * 60;
-        if (frame == atFrame) {
-            if (outTime) *outTime = time;
-            return values + componentCount * frames;
-        }
-    }
-    return 0;
-}
-
-
+//
+// Sonme utility functions
+//
 static float AnimationGetClipDuration(cgltf_animation *animationClip)
 {
     float duration = 0;
@@ -89,14 +48,13 @@ static float AnimationGetClipDuration(cgltf_animation *animationClip)
         static float    lastMax = 0;
 
         for (size_t j = 0; j < NB_OF_ELEMENTS_IN_ARRAY(input->max); j++) {
-            if (input->has_max && input->max[i] > lastMax)
-                lastMax = input->max[i];
+            if (input->has_max && input->max[j] > lastMax)
+                lastMax = input->max[j];
         }
         duration = lastMax;
     }
     return duration;
 }
-
 
 static float readFloatFromAccessor(cgltf_accessor *accessor, cgltf_size idx)
 {
@@ -120,43 +78,45 @@ static glm::quat getQuatAtKeyframe(cgltf_animation_sampler *sampler, int keyfram
     return ((glm::quat *)values)[keyframe];
 }
 
+/////////////////////////////////////
 
 
 
+std::vector<glm::mat4> finalPoseJointMatrices;
+std::vector<glm::mat4> currentPoseJointMatrices;
+std::vector<Transform> currentPoseJointTransforms;
 
-std::vector<glm::mat4> jointMatrices;
-std::vector<glm::mat4> globalJointMatrices;
-std::vector<Transform> jointTransforms;
-std::vector<Transform> localJointTransforms;
 
-static void ComputeLocalJointTransforms(cgltf_data *data)
+// note: this is unsued right now
+std::vector<Transform> bindPoseLocalJointTransforms;
+static void            ComputeLocalJointTransforms(cgltf_data *data)
 {
     cgltf_node **joints = data->skins->joints;
-    localJointTransforms.resize(data->skins->joints_count);
+    bindPoseLocalJointTransforms.resize(data->skins->joints_count);
 
     for (size_t joint_idx = 0; joint_idx < data->skins->joints_count; joint_idx++) {
-        localJointTransforms[joint_idx].translation = *(glm::vec3 *)joints[joint_idx]->translation;
-        glm::vec3 R                                 = glm::eulerAngles(*(glm::quat *)joints[joint_idx]->rotation);
-        localJointTransforms[joint_idx].rotation    = R;
-        localJointTransforms[joint_idx].scale       = 1.f;
+        bindPoseLocalJointTransforms[joint_idx].translation = *(glm::vec3 *)joints[joint_idx]->translation;
+        glm::vec3 R                                         = glm::eulerAngles(*(glm::quat *)joints[joint_idx]->rotation);
+        bindPoseLocalJointTransforms[joint_idx].rotation    = R;
+        bindPoseLocalJointTransforms[joint_idx].scale       = 1.f;
 
-        localJointTransforms[joint_idx].name = joints[joint_idx]->name;
+        bindPoseLocalJointTransforms[joint_idx].name = joints[joint_idx]->name;
 
         if (joint_idx == 0) continue;
 
         if (joints[joint_idx]->parent == joints[joint_idx - 1]) {
-            localJointTransforms[joint_idx].parent       = &localJointTransforms[joint_idx - 1];
-            localJointTransforms[joint_idx].parent->name = localJointTransforms[joint_idx - 1].name;
+            bindPoseLocalJointTransforms[joint_idx].parent       = &bindPoseLocalJointTransforms[joint_idx - 1];
+            bindPoseLocalJointTransforms[joint_idx].parent->name = bindPoseLocalJointTransforms[joint_idx - 1].name;
 
-            localJointTransforms[joint_idx - 1].child       = &localJointTransforms[joint_idx];
-            localJointTransforms[joint_idx - 1].child->name = localJointTransforms[joint_idx].name;
+            bindPoseLocalJointTransforms[joint_idx - 1].child       = &bindPoseLocalJointTransforms[joint_idx];
+            bindPoseLocalJointTransforms[joint_idx - 1].child->name = bindPoseLocalJointTransforms[joint_idx].name;
         } else {
             // find index of parent joint
             auto currentJointParent = joints[joint_idx]->parent;
             for (size_t i = 0; i < data->skins->joints_count; i++) {
                 if (joints[i] == currentJointParent) {
-                    localJointTransforms[joint_idx].parent       = &localJointTransforms[i];
-                    localJointTransforms[joint_idx].parent->name = localJointTransforms[i].name;
+                    bindPoseLocalJointTransforms[joint_idx].parent       = &bindPoseLocalJointTransforms[i];
+                    bindPoseLocalJointTransforms[joint_idx].parent->name = bindPoseLocalJointTransforms[i].name;
                 }
             }
         }
@@ -171,7 +131,7 @@ static void ComputeLocalJointTransforms(cgltf_data *data)
 
     //     SDL_Log("\n-- Joint[%s]: --", data->skins->joints[joint_idx]->name);
     //     SDL_Log("-----------TR-------------");
-    //     if ((Tr = localJointTransforms[joint_idx].parent) != NULL)
+    //     if ((Tr = bindPoseLocalJointTransforms[joint_idx].parent) != NULL)
     //         for (size_t i = 0; Tr;) {
     //             SDL_Log("Child[%s]:", Tr->name);
     //             Tr = Tr->parent;
@@ -190,26 +150,12 @@ static void ComputeLocalJointTransforms(cgltf_data *data)
 
 
 
-static int       i = 0;
-static glm::mat4 UpdateGlobalMatrix(Transform *t, glm::mat4 m)
-{
-    // SDL_Log("%d", i++);
-    if (!t->parent) {
-        i = 0;
-        return glm::mat4(1);
-    }
-    SDL_Log("[%d]: %s * %s", i++, t->parent->name, t->name);
-
-    return UpdateGlobalMatrix(t->parent, t->parent->GetLocalMatrix() * t->GetLocalMatrix());
-}
-
-
-
-
 
 static void AnimationUpdate(float dt, cgltf_data *data)
 {
-    static float duration   = AnimationGetClipDuration(&data->animations[0]);
+    static float duration = AnimationGetClipDuration(&data->animations[0]);
+    assert(duration > 0 && duration);
+
     static float globalTime = 0;
     globalTime += dt;
     float animTime = fmodf(globalTime, duration);
@@ -217,9 +163,9 @@ static void AnimationUpdate(float dt, cgltf_data *data)
     const uint8_t jointCount = data->skins->joints_count;
     auto          joints     = data->skins->joints;
 
-    jointMatrices.resize(jointCount);
-    globalJointMatrices.resize(jointCount);
-    jointTransforms.resize(jointCount);
+    finalPoseJointMatrices.resize(jointCount);
+    currentPoseJointMatrices.resize(jointCount);
+    currentPoseJointTransforms.resize(jointCount);
 
 
     assert(data->skins_count == 1);
@@ -227,7 +173,7 @@ static void AnimationUpdate(float dt, cgltf_data *data)
 
     static int iterationNb = 0;
     if (iterationNb++ == 0)
-        SDL_Log("playing:[%s]", animation->name);
+        SDL_Log("playing:[%s] | duration: %fsec", animation->name, duration);
 
 
     // For each Joint
@@ -254,43 +200,41 @@ static void AnimationUpdate(float dt, cgltf_data *data)
                         break;
                     }
                 }
-                if (currentKey < 0 || nextKey < 0) {
-                    SDL_Log("invalid keyframe");
-                    return;
-                }
+
+                assert(currentKey >= 0 && nextKey >= 0);
 
                 cgltf_animation_sampler *sampler = channel->sampler;
 
                 // todo: currentKey => nextKey interpolation
                 // use slerp for quaternions
                 if (channel->target_path == cgltf_animation_path_type_translation) {
-                    jointTransforms[joint_idx].translation = getVec3AtKeyframe(sampler, currentKey);
+                    currentPoseJointTransforms[joint_idx].translation = getVec3AtKeyframe(sampler, currentKey);
                 } else if (channel->target_path == cgltf_animation_path_type_rotation) {
-                    auto Q                              = getQuatAtKeyframe(sampler, currentKey);
-                    jointTransforms[joint_idx].rotation = glm::eulerAngles(Q);
+                    auto Q                                         = getQuatAtKeyframe(sampler, currentKey);
+                    currentPoseJointTransforms[joint_idx].rotation = glm::eulerAngles(Q);
                 } else if (channel->target_path == cgltf_animation_path_type_scale) {
-                    jointTransforms[joint_idx].scale = 1.f;
+                    currentPoseJointTransforms[joint_idx].scale = 1.f;
                 }
 
-                jointTransforms[joint_idx].name = joints[joint_idx]->name;
+                currentPoseJointTransforms[joint_idx].name = joints[joint_idx]->name;
 
 
 
                 if (joint_idx == 0) continue;
 
                 if (joints[joint_idx]->parent == joints[joint_idx - 1]) {
-                    jointTransforms[joint_idx].parent       = &jointTransforms[joint_idx - 1];
-                    jointTransforms[joint_idx].parent->name = jointTransforms[joint_idx - 1].name;
+                    currentPoseJointTransforms[joint_idx].parent       = &currentPoseJointTransforms[joint_idx - 1];
+                    currentPoseJointTransforms[joint_idx].parent->name = currentPoseJointTransforms[joint_idx - 1].name;
 
-                    // jointTransforms[joint_idx - 1].child       = &jointTransforms[joint_idx];
-                    // jointTransforms[joint_idx - 1].child->name = jointTransforms[joint_idx].name;
+                    // currentPoseJointTransforms[joint_idx - 1].child       = &currentPoseJointTransforms[joint_idx];
+                    // currentPoseJointTransforms[joint_idx - 1].child->name = currentPoseJointTransforms[joint_idx].name;
                 } else {
                     // find index of parent joint
                     auto currentJointParent = joints[joint_idx]->parent;
                     for (size_t i = 0; i < data->skins->joints_count; i++) {
                         if (joints[i] == currentJointParent) {
-                            jointTransforms[joint_idx].parent       = &jointTransforms[i];
-                            jointTransforms[joint_idx].parent->name = jointTransforms[i].name;
+                            currentPoseJointTransforms[joint_idx].parent       = &currentPoseJointTransforms[i];
+                            currentPoseJointTransforms[joint_idx].parent->name = currentPoseJointTransforms[i].name;
                         }
                     }
                 }
@@ -302,14 +246,14 @@ static void AnimationUpdate(float dt, cgltf_data *data)
 
         // comppute global matrix for current joint
         if (joint_idx == 0) {
-            globalJointMatrices[0] = jointTransforms[0].GetLocalMatrix();
+            currentPoseJointMatrices[0] = currentPoseJointTransforms[0].GetLocalMatrix();
         } else {
-            globalJointMatrices[joint_idx] = jointTransforms[joint_idx].ComputeGlobalMatrix();
+            currentPoseJointMatrices[joint_idx] = currentPoseJointTransforms[joint_idx].ComputeGlobalMatrix();
         }
 
-        glm::mat4 *invBindMatrices = ((glm::mat4 *)((uint8_t *)data->skins->inverse_bind_matrices->buffer_view->buffer->data + data->skins->inverse_bind_matrices->buffer_view->offset));
-        jointMatrices[joint_idx]   = globalJointMatrices[joint_idx] * invBindMatrices[joint_idx];
-        // jointMatrices[joint_idx]   = globalJointMatrices[joint_idx] * glm::inverse(localJointTransforms[joint_idx].ComputeGlobalMatrix());
+        glm::mat4 *invBindMatrices        = ((glm::mat4 *)((uint8_t *)data->skins->inverse_bind_matrices->buffer_view->buffer->data + data->skins->inverse_bind_matrices->buffer_view->offset));
+        finalPoseJointMatrices[joint_idx] = currentPoseJointMatrices[joint_idx] * invBindMatrices[joint_idx];
+        // finalPoseJointMatrices[joint_idx]   = currentPoseJointMatrices[joint_idx] * glm::inverse(bindPoseLocalJointTransforms[joint_idx].ComputeGlobalMatrix());
     } // End of Joints loop
 }
 
