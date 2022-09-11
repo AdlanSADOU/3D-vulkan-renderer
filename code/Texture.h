@@ -23,7 +23,7 @@ static Texture *TextureCreate(const char *path)
         return NULL;
     }
 
-    // note(ad): if we comment these out, texture still repeats
+    // note: if we comment these out, texture still repeats
     // but in a different way...?
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);

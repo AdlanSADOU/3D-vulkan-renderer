@@ -29,7 +29,7 @@ struct Input;
 void Example3DInit();
 void Example3DUpdateDraw(float dt, Input input);
 
-#define VSYNC 1
+#define VSYNC 0
 
 struct Input
 {

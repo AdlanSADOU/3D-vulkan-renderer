@@ -30,16 +30,17 @@ struct Ground
 
 struct Entity
 {
-    Model2 model;
+    SkinnedModel model;
 };
-Entity testRig;
 
 std::vector<Entity> entities {};
 
 void Example3DInit()
 {
-    camera.CameraCreate({ 0, 5, 16 }, 45.f, WND_WIDTH / (float)WND_HEIGHT, .8f, 1000.f);
-    gCameraInUse = &camera;
+    camera.CameraCreate({ 0, 200, 150 }, 45.f, WND_WIDTH / (float)WND_HEIGHT, .8f, 1000.f);
+    camera._pitch = -60;
+    gCameraInUse  = &camera;
+
 
     gTextures.insert({ "CesiumMan", TextureCreate("assets/CesiumMan_img0.jpg") });
     gTextures.insert({ "brick_wall", TextureCreate("assets/brick_wall.jpg") });
@@ -51,6 +52,7 @@ void Example3DInit()
     gTextures.insert({ "Material", TextureCreate("assets/Material.png") });
 
 
+    // todo: cache shaders in MaterialCreate
     gMaterials.insert({ "standard", MaterialCreate("shaders/point.shader", NULL) });
     gMaterials.insert({ "CesiumMan", MaterialCreate("shaders/standard.shader", gTextures["CesiumMan"]) });
     gMaterials.insert({ "mileMaterial", MaterialCreate("shaders/standard.shader", gTextures["ground"]) });
@@ -60,61 +62,26 @@ void Example3DInit()
 
 
 
+    entities.resize(2);
+    for (size_t i = 0; i < entities.size(); i++) {
+        static float z                   = 0;
+        static float x                   = 0;
+        int          distanceFactor      = 24;
+        int          max_entities_on_row = 9;
 
-
-    std::string lowPoly01       = "low_poly_01.gltf";
-    std::string char05Milestone = "char_05_milestone.gltf";
-
-    // animation tests
-    std::string path = "assets/" + char05Milestone;
-
-
-    // testRig.model.Create("assets/test_rig_2.gltf");
-    // testRig.model._meshes[0]._materials[0] = gMaterials["chibiMaterial"];
-    // testRig.model._transform.translation   = { 0.f, 0.f, -0.f };
-    // testRig.model._transform.rotation      = { 0.f, 0.f, 0.f };
-    // testRig.model._transform.scale         = 1.f;
-
-    testRig.model.Create("assets/capoera.gltf");
-    testRig.model._meshes[0]._materials[0] = gMaterials["mileMaterial"];
-    testRig.model._transform.translation   = { 0.f, 0.f, -6.f };
-    testRig.model._transform.rotation      = { 0.f, 0.f, 0.f };
-    testRig.model._transform.scale         = .2f;
-
-
-    // testRig.model.Create("assets/test_rig_meta.gltf");
-    // testRig.model._meshes[0]._materials[0] = gMaterials["chibiMaterial"];
-    // testRig.model._transform.translation   = { 0.f, 0.f, 0.f };
-    // testRig.model._transform.rotation      = { 0.f, 0.f, 0.f };
-    // testRig.model._transform.scale         = 1.f;
-    ComputeLocalJointTransforms(testRig.model._data);
-
-    // PrintAnimationClipTransformsByFrame(testRig.model._data, 15);
-
-    //////////////////////////////////////
-
-    entities.resize(0);
-
-    // entities[0].model.Create(path.c_str());
-    // entities[0].model._meshes[0]._materials[0] = gMaterials["mileMaterial"];
-    // entities[0].model._meshes[0]._materials[1] = gMaterials["mileMaterial"];
-    // entities[0].model._meshes[0]._materials[2] = gMaterials["mileMaterial"];
-    // entities[0].model._transform.translation   = { 0.f, 0.f, -24.f };
-    // entities[0].model._transform.rotation      = { 0.f, 0.f, 0.f };
-    // entities[0].model._transform.scale         = 1.f;
-
-    // entities[1].model.Create("assets/skinned_cube.gltf");
-    // entities[1].model._meshes[0]._materials[0] = gMaterials["cubeMaterial"];
-    // entities[1].model._transform.translation   = { -14.f, 0, -16.f };
-    // entities[1].model._transform.rotation      = { 0, 0, 0 };
-    // entities[1].model._transform.scale         = 1.f;
-
-    // entities[2].model.Create("assets/chibi_02_ex.gltf");
-    // entities[2].model._meshes[0]._materials[0] = gMaterials["chibiMaterial"];
-    // entities[2].model._transform.translation   = { 14.f, 0.f, -16.f };
-    // entities[2].model._transform.rotation      = { 0.f, 0.f, 0.f };
-    // entities[2].model._transform.scale         = 1.f;
-
+        if (i > 0) x++;
+        if (x == max_entities_on_row) {
+            x = 0;
+            z++;
+        }
+        entities[i].model.Create("assets/capoera.gltf"); // todo: if for some reason this fails to load
+        // then the following line will crash
+        entities[i].model._meshes[0]._materials[0] = gMaterials["mileMaterial"];
+        entities[i].model._transform.translation   = { -100.f + x * distanceFactor, 0.f, -100.f + z * distanceFactor };
+        entities[i].model._transform.rotation      = { 0.f, 0.f, 0.f };
+        entities[i].model._transform.scale         = .1f;
+        entities[i].model.currentAnimation         = &entities[i].model._animations[0];
+    }
 
     ground.material = gMaterials["groundMaterial"];
     glGenVertexArrays(1, &ground.VAO);
@@ -128,9 +95,6 @@ void Example3DUpdateDraw(float dt, Input input)
 
     // draw wireframe
     // glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-
-    AnimationUpdate(dt, testRig.model._data);
-
 
 
     glEnable(GL_DEPTH_TEST);
@@ -150,33 +114,8 @@ void Example3DUpdateDraw(float dt, Input input)
     //
     // Entities
     //
-
-    testRig.model.Draw();
-
-    for (size_t n = 0; n < entities.size(); n++) {
-        for (int i = 0; i < entities[n].model._meshes.size(); i++) {
-            glm::mat4 model = glm::mat4(1);
-
-            model = glm::translate(model, entities[n].model._transform.translation)
-                * glm::rotate(model, (Radians(entities[n].model._transform.rotation.x)), glm::vec3(1, 0, 0))
-                * glm::rotate(model, (Radians(entities[n].model._transform.rotation.y)), glm::vec3(0, 1, 0))
-                * glm::rotate(model, (Radians(entities[n].model._transform.rotation.z)), glm::vec3(0, 0, 1))
-                * glm::scale(model, glm::vec3(entities[n].model._transform.scale));
-
-            for (int j = 0; j < entities[n].model._meshes[i]._VAOs.size(); j++) {
-
-                Material *material = entities[n].model._meshes[i]._materials[j];
-                ShaderUse(material->_shader->programID);
-                ShaderSetMat4ByName("projection", gCameraInUse->_projection, material->_shader->programID);
-                ShaderSetMat4ByName("view", gCameraInUse->_view, material->_shader->programID);
-                ShaderSetMat4ByName("model", model, material->_shader->programID);
-                glBindTexture(GL_TEXTURE_2D, material->_texture->id);
-
-                Mesh2 mesh = entities[n].model._meshes[i];
-                glBindVertexArray(mesh._VAOs[j]);
-                glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, entities[n].model._DataBufferID);
-                glDrawElements(GL_TRIANGLES, mesh._indicesCount[j], GL_UNSIGNED_SHORT, (void *)mesh._indicesOffsets[j]);
-            }
-        }
+    for (size_t i = 0; i < entities.size(); i++) {
+        entities[i].model.AnimationUpdate(dt);
+        entities[i].model.Draw();
     }
 }

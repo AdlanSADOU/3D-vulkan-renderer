@@ -18,7 +18,7 @@ struct Camera
     float     _aspect      = {};
     float     _near        = {};
     float     _far         = {};
-    float     _speed       = 20.f;
+    float     _speed       = 120.f;
     float     _sensitivity = .046f;
 
 
@@ -46,15 +46,14 @@ void Camera::CameraCreate(glm::vec3 position, float fov, float aspect, float nea
 
 void Camera::CameraUpdate(Input &input, float dt)
 {
-
     if (input.up) _position += _forward * _speed * dt;
     if (input.down) _position -= _forward * _speed * dt;
     if (input.left) _position -= glm::normalize(glm::cross(_forward, _up)) * _speed * dt;
     if (input.right) _position += glm::normalize(glm::cross(_forward, _up)) * _speed * dt;
 
     float factor = 0;
-    if (input.E) factor += 1.f;
-    if (input.Q) factor -= 1.f;
+    if (input.E) factor -= 1.f;
+    if (input.Q) factor += 1.f;
     _position.y += factor * dt / _sensitivity;
 
     static float xrelPrev = 0;

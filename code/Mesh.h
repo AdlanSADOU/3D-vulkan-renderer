@@ -225,28 +225,49 @@ struct Model
 
 
 //---------------------------------------
-// Non-interleaved Meshes implementation
+// Non-interleaved Mesh implementation
 //---------------------------------------
-struct Mesh2
+
+
+
+struct Animation
 {
-    std::vector<Material *> _materials      = {};
-    std::vector<uint32_t>   _VAOs           = {};
-    std::vector<uint64_t>   _indicesCount   = {};
-    std::vector<uint64_t>   _indicesOffsets = {};
+    void       *handle      = {};
+    const char *name        = {};
+    float       duration    = {};
+    float       globalTimer = {};
+
+    uint8_t      jointCount;
+    cgltf_node **joints;
+
+    std::vector<glm::mat4> finalPoseJointMatrices;
+    std::vector<glm::mat4> currentPoseJointMatrices;
+    std::vector<Transform> currentPoseJointTransforms;
 };
 
-struct Model2
+struct SkinnedModel
 {
-    cgltf_data        *_data         = {};
-    std::vector<Mesh2> _meshes       = {};
-    Transform          _transform    = {};
-    uint32_t           _DataBufferID = {};
+    struct skinnedMesh
+    {
+        std::vector<Material *> _materials      = {};
+        std::vector<uint32_t>   _VAOs           = {};
+        std::vector<uint64_t>   _indicesCount   = {};
+        std::vector<uint64_t>   _indicesOffsets = {};
+    };
+
+    std::vector<skinnedMesh> _meshes = {};
+    std::vector<Animation>   _animations;
+    Animation               *currentAnimation = {};
+    Transform                _transform       = {};
+    void                    *_data            = {}; // opaque handle to cgltf_data
+    uint32_t                 _DataBufferID    = {};
 
     void Create(const char *path);
+    void AnimationUpdate(float dt);
     void Draw();
 };
 
-void Model2::Draw()
+void SkinnedModel::Draw()
 {
     glm::mat4 model = glm::mat4(1);
 
@@ -261,7 +282,7 @@ void Model2::Draw()
     ShaderSetMat4ByName("projection", gCameraInUse->_projection, material->_shader->programID);
     ShaderSetMat4ByName("view", gCameraInUse->_view, material->_shader->programID);
     ShaderSetMat4ByName("model", model, material->_shader->programID);
-    ShaderSetMat4ByName("finalPoseJointMatrices", finalPoseJointMatrices[0], finalPoseJointMatrices.size(), material->_shader->programID);
+    ShaderSetMat4ByName("finalPoseJointMatrices", currentAnimation->finalPoseJointMatrices[0], currentAnimation->finalPoseJointMatrices.size(), material->_shader->programID);
 
     glBindTexture(GL_TEXTURE_2D, material->_texture->id);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, _DataBufferID);
@@ -274,31 +295,29 @@ void Model2::Draw()
     }
 }
 
-void Model2::Create(const char *path)
+void SkinnedModel::Create(const char *path)
 {
     // note: this gltf data is an asset, as such there sould only exist one
-    // instance of this in memory. So, instead of giving a path
-    // make entries into a hash table
+    // instance of this in memory. So, instead of giving a path,
+    // make entries into a hash table on first load
+    cgltf_data   *data;
     cgltf_options options = {};
-    cgltf_result  result  = cgltf_parse_file(&options, path, &_data);
+    cgltf_result  result  = cgltf_parse_file(&options, path, &data);
 
-    if (cgltf_parse_file(&options, path, &_data) == cgltf_result_success) {
-        if (cgltf_load_buffers(&options, _data, path) == cgltf_result_success) {
-            if ((result = cgltf_validate(_data)) != cgltf_result_success) {
+    if (cgltf_parse_file(&options, path, &data) == cgltf_result_success) {
+        if (cgltf_load_buffers(&options, data, path) == cgltf_result_success) {
+            if ((result = cgltf_validate(data)) != cgltf_result_success) {
                 SDL_Log("cgltf validation error");
                 return;
             }
-            if (_data->meshes_count == 0) {
-                // todo: make this format into a LOG_ERROR() macro
-                SDL_Log("%s:%d: no meshes found...", __FILE__, __LINE__);
-                return;
-            }
-            result = cgltf_load_buffers(&options, _data, path);
+            result = cgltf_load_buffers(&options, data, path);
         }
     } else {
         SDL_Log("Failed to load [%s]", path);
+        return;
     }
 
+    _data = (void *)data;
 
     // todo: we do take yet take into account the exported model transform of the mesh
 
@@ -306,16 +325,16 @@ void Model2::Create(const char *path)
     glBindBuffer(GL_ARRAY_BUFFER, _DataBufferID);
 
 
-    assert(_data->buffers_count == 1);
+    assert(data->buffers_count == 1);
     // note: currently we allocate more data on the GPU than we really need to render this mesh
     // we allocate for the entire .bin which contains more stuff than just primitives & indices
-    size_t total_data_size_for_current_submesh = _data->buffers->size;
+    size_t total_data_size_for_current_submesh = data->buffers->size;
 
 
 
-    // for (size_t mesh_idx = 0; mesh_idx < _data->meshes_count; mesh_idx++) {
-    //     size_t           submeshCount = _data->meshes[mesh_idx].primitives_count;
-    //     cgltf_primitive *primitives   = _data->meshes[mesh_idx].primitives;
+    // for (size_t mesh_idx = 0; mesh_idx < data->meshes_count; mesh_idx++) {
+    //     size_t           submeshCount = data->meshes[mesh_idx].primitives_count;
+    //     cgltf_primitive *primitives   = data->meshes[mesh_idx].primitives;
     //     primitives->mappings->variant;
     //     for (size_t submesh_idx = 0; submesh_idx < submeshCount; submesh_idx++) {
 
@@ -333,11 +352,11 @@ void Model2::Create(const char *path)
 
 
     size_t totalSize = 0;
-    _meshes.resize(_data->meshes_count);
-    for (size_t mesh_idx = 0; mesh_idx < _data->meshes_count; mesh_idx++) {
-        cgltf_primitive *primitives = _data->meshes[mesh_idx].primitives;
+    _meshes.resize(data->meshes_count);
+    for (size_t mesh_idx = 0; mesh_idx < data->meshes_count; mesh_idx++) {
+        cgltf_primitive *primitives = data->meshes[mesh_idx].primitives;
 
-        size_t submeshCount = _data->meshes[mesh_idx].primitives_count;
+        size_t submeshCount = data->meshes[mesh_idx].primitives_count;
         _meshes[mesh_idx]._VAOs.resize(submeshCount);
         _meshes[mesh_idx]._indicesCount.resize(submeshCount);
         _meshes[mesh_idx]._indicesOffsets.resize(submeshCount);
@@ -353,7 +372,7 @@ void Model2::Create(const char *path)
             glBindVertexArray(_meshes[mesh_idx]._VAOs[submesh_idx]);
             glBindBuffer(GL_ARRAY_BUFFER, _DataBufferID);
 
-            for (size_t attrib_idx = 0; attrib_idx < _data->meshes->primitives->attributes_count; attrib_idx++) {
+            for (size_t attrib_idx = 0; attrib_idx < data->meshes->primitives->attributes_count; attrib_idx++) {
                 cgltf_attribute   *attrib = primitives[submesh_idx].attributes + attrib_idx;
                 cgltf_buffer_view *view   = attrib->data->buffer_view;
 
@@ -393,4 +412,126 @@ void Model2::Create(const char *path)
         // glBindBuffer(GL_ARRAY_BUFFER, 0);
         // glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
     }
+
+    // if no animations to handle, we just end here
+    if (!data->animations_count) return;
+
+    _animations.resize(data->animations_count);
+    for (size_t animation_idx = 0; animation_idx < data->animations_count; animation_idx++) {
+        Animation *anim = &_animations[animation_idx];
+
+        _animations[animation_idx] = {
+            .handle   = &data->animations[animation_idx],
+            .name     = data->animations[animation_idx].name,
+            .duration = AnimationGetClipDuration(&data->animations[animation_idx]),
+        };
+
+        anim->jointCount = data->skins->joints_count;
+        anim->joints     = data->skins->joints;
+        anim->finalPoseJointMatrices.resize(anim->jointCount);
+        anim->currentPoseJointMatrices.resize(anim->jointCount);
+        anim->currentPoseJointTransforms.resize(anim->jointCount);
+
+        for (size_t i = 0; i < anim->finalPoseJointMatrices.size(); i++) {
+            anim->finalPoseJointMatrices[i] = glm::mat4(1);
+        }
+    }
+}
+
+
+
+
+
+void SkinnedModel::AnimationUpdate(float dt)
+{
+    assert(currentAnimation->duration > 0);
+    cgltf_animation *anim = (cgltf_animation *)currentAnimation->handle;
+
+    currentAnimation->globalTimer += dt;
+    float animTime = fmodf(currentAnimation->globalTimer, currentAnimation->duration);
+
+
+    static int iterationNb = 0;
+
+    if (iterationNb++ == 0) {
+        SDL_Log("playing:[%s] | duration: %fsec", anim->name, currentAnimation->duration);
+    }
+
+    // For each Joint
+    for (size_t joint_idx = 0; joint_idx < currentAnimation->jointCount; joint_idx++) {
+
+        // For each Channel
+        for (size_t chan_idx = 0; chan_idx < anim->channels_count; chan_idx++) {
+            cgltf_animation_channel *channel = &anim->channels[chan_idx];
+
+            // if channel target matches current joint
+            if (channel->target_node == currentAnimation->joints[joint_idx]) { // && target_path!!!
+
+                int currentKey = -1;
+                int nextKey    = -1;
+
+                cgltf_animation_sampler *sampler = channel->sampler;
+                for (size_t timestamp_idx = 0; timestamp_idx < sampler->input->count - 1; timestamp_idx++) {
+                    float sampled_time;
+                    float sampled_time_prev;
+
+                    if ((sampled_time = readFloatFromAccessor(sampler->input, timestamp_idx + 1)) >= animTime) {
+                        currentKey = timestamp_idx;
+                        nextKey    = currentKey + 1;
+                        break;
+                    }
+                }
+
+                assert(currentKey >= 0 && nextKey >= 0);
+
+
+                // todo: currentKey => nextKey interpolation
+                // use slerp for quaternions
+                if (channel->target_path == cgltf_animation_path_type_translation) {
+                    currentAnimation->currentPoseJointTransforms[joint_idx].translation = getVec3AtKeyframe(sampler, currentKey);
+                } else if (channel->target_path == cgltf_animation_path_type_rotation) {
+                    auto Q                                                           = getQuatAtKeyframe(sampler, currentKey);
+                    currentAnimation->currentPoseJointTransforms[joint_idx].rotation = glm::eulerAngles(Q);
+                } else if (channel->target_path == cgltf_animation_path_type_scale) {
+                    currentAnimation->currentPoseJointTransforms[joint_idx].scale = 1.f;
+                }
+
+                currentAnimation->currentPoseJointTransforms[joint_idx].name = currentAnimation->joints[joint_idx]->name;
+
+
+
+                if (joint_idx == 0) continue;
+
+                if (currentAnimation->joints[joint_idx]->parent == currentAnimation->joints[joint_idx - 1]) {
+                    currentAnimation->currentPoseJointTransforms[joint_idx].parent       = &currentAnimation->currentPoseJointTransforms[joint_idx - 1];
+                    currentAnimation->currentPoseJointTransforms[joint_idx].parent->name = currentAnimation->currentPoseJointTransforms[joint_idx - 1].name;
+
+                    // currentAnimation->currentPoseJointTransforms[joint_idx - 1].child       = &currentAnimation->currentPoseJointTransforms[joint_idx];
+                    // currentAnimation->currentPoseJointTransforms[joint_idx - 1].child->name = currentAnimation->currentPoseJointTransforms[joint_idx].name;
+                } else {
+                    // find index of parent joint
+                    auto currentJointParent = currentAnimation->joints[joint_idx]->parent;
+                    for (size_t i = 0; i < currentAnimation->jointCount; i++) {
+                        if (currentAnimation->joints[i] == currentJointParent) {
+                            currentAnimation->currentPoseJointTransforms[joint_idx].parent       = &currentAnimation->currentPoseJointTransforms[i];
+                            currentAnimation->currentPoseJointTransforms[joint_idx].parent->name = currentAnimation->currentPoseJointTransforms[i].name;
+                        }
+                    }
+                }
+            }
+        } // End of channels loop for the current joint
+
+
+
+
+        // comppute global matrix for current joint
+        if (joint_idx == 0) {
+            currentAnimation->currentPoseJointMatrices[0] = currentAnimation->currentPoseJointTransforms[0].GetLocalMatrix();
+        } else {
+            currentAnimation->currentPoseJointMatrices[joint_idx] = currentAnimation->currentPoseJointTransforms[joint_idx].ComputeGlobalMatrix();
+        }
+        glm::mat4 *invBindMatrices                          = ((glm::mat4 *)((uint8_t *)((cgltf_data *)_data)->skins->inverse_bind_matrices->buffer_view->buffer->data + ((cgltf_data *)_data)->skins->inverse_bind_matrices->buffer_view->offset));
+        currentAnimation->finalPoseJointMatrices[joint_idx] = currentAnimation->currentPoseJointMatrices[joint_idx] * invBindMatrices[joint_idx];
+        // finalPoseJointMatrices[joint_idx]   = currentPoseJointMatrices[joint_idx] * glm::inverse(bindPoseLocalJointTransforms[joint_idx].ComputeGlobalMatrix());
+    } // End of Joints loop
 }

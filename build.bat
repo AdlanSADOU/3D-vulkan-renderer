@@ -1,7 +1,7 @@
 @echo off
 
-@REM set COMPILER_FLAGS= -FC -GR- -EHa- -EHsc -EHs -nologo  -MP -std:c++latest /MT /O2
-set COMPILER_FLAGS= -FC -GR- -EHa- -EHsc -EHs -nologo -Zi -Zf -MP -std:c++latest /MTd
+set COMPILER_FLAGS= -FC -GR- -EHa- -EHsc -EHs -nologo  -MP -std:c++latest /MT /O2
+@REM set COMPILER_FLAGS= -FC -GR- -EHa- -EHsc -EHs -nologo -Zi -Zf -MP -std:c++latest /MTd
 
 set CODE=../code/*.cpp
 set INC=/I../code/
