@@ -13,6 +13,7 @@
 #include "mymath.h"
 
 #define LOG_SHADER_SOURCE 0
+static size_t strContains(size_t fromOffset, const char *str, size_t strLength, char *src, size_t srcLength);
 
 struct Shader
 {

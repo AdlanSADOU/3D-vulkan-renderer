@@ -62,7 +62,7 @@ void Example3DInit()
 
 
 
-    entities.resize(20);
+    entities.resize(80);
     for (size_t i = 0; i < entities.size(); i++) {
         static float z = 0;
         static float x = 0;
@@ -110,6 +110,7 @@ void Example3DUpdateDraw(float dt, Input input)
     ShaderUse(ground.material->_shader->programID);
     ShaderSetMat4ByName("proj", gCameraInUse->_projection, ground.material->_shader->programID);
     ShaderSetMat4ByName("view", gCameraInUse->_view, ground.material->_shader->programID);
+
     glBindTexture(GL_TEXTURE_2D, ground.material->_texture->id);
     glBindVertexArray(ground.VAO);
     glDrawArrays(GL_TRIANGLES, 0, 6);
@@ -118,7 +119,7 @@ void Example3DUpdateDraw(float dt, Input input)
     // Entities
     //
     for (size_t i = 0; i < entities.size(); i++) {
-        entities[i].model.AnimationUpdate(dt);
+        // entities[i].model.AnimationUpdate(dt);
         entities[i].model.Draw();
     }
 }

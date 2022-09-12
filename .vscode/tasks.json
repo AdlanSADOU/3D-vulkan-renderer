@@ -3,8 +3,30 @@
 	"tasks": [
 		{
 			"type": "process",
-			"label": "buildc",
+			"label": "Debug Build",
 			"command": "build.bat",
+			"args": ["Debug"],
+			"problemMatcher": [
+				"$msCompile"
+			],
+			"presentation": {
+				"echo": false,
+				"reveal": "always",
+				"focus": true,
+				"panel": "shared",
+				"showReuseMessage": false,
+				"clear": true
+			},
+			"group": {
+				"kind": "build",
+				"isDefault": true
+			}
+		},
+		{
+			"type": "process",
+			"label": "Release Build",
+			"command": "build.bat",
+			"args": ["Release"],
 			"problemMatcher": [
 				"$msCompile"
 			],

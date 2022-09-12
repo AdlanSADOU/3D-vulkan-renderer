@@ -1,39 +1,42 @@
 @echo off
 
-set COMPILER_FLAGS= -FC -GR- -EHa- -EHsc -EHs -nologo  -MP -std:c++latest /MT /O2
-@REM set COMPILER_FLAGS= -FC -GR- -EHa- -EHsc -EHs -nologo -Zi -Zf -MP -std:c++latest /MTd
-
-set CODE=../code/*.cpp
-set INC=/I../code/
-
+if %1 == Debug (
+    echo %1
+    set COMPILER_FLAGS= -FC -GR- -EHa- -EHsc -EHs -nologo  -MP -std:c++latest /MT /O2
+    ) ELSE IF %1 == Release (
+    echo %1 
+    set COMPILER_FLAGS= -FC -GR- -EHa- -EHsc -EHs -nologo -Zi -Zf -MP -std:c++latest /MTd
+    )
 
 
 set VENDOR=../vendor
 
-set ASSIMP_INC=/I %VENDOR%/Assimp/include
-set GLEW_INC=/I %VENDOR%/GLEW/include
-set GLM_INC=/I %VENDOR%/GLM
-set SDL2_INC=/I %VENDOR%/SDL2/include
-set SINGLE_HEADER_INC=/I %VENDOR%/SingleHeaderLibs
-set INCLUDES=%INC% %SDL2_INC% %GLEW_INC% %GLM_INC% %SINGLE_HEADER_INC%
+set ASSIMP=/I %VENDOR%/Assimp/include
+set GLEW=/I %VENDOR%/GLEW/include
+set GLM=/I %VENDOR%/GLM
+set SDL2=/I %VENDOR%/SDL2/include
+set SINGLE_HEADER=/I %VENDOR%/SingleHeaderLibs
+
+set INC=/I../code/
+set INCLUDES=%INC% %SDL2% %GLEW% %GLM% %SINGLE_HEADER%
 
 
 
-set LIBPATH=/LIBPATH:../vendor
+set LIBPATH=/LIBPATH:%VENDOR%
 
-set SDL2_LIBRARY_PATH=%LIBPATH%/SDL2/lib/
-set GLEW_LIBRARY_PATH=%LIBPATH%/GLEW/lib/Release/x64
-set ASSIMP_LIBRARY_PATH=%LIBPATH%/Assimp/lib/x64
-set LIB_PATHS=%SDL2_LIBRARY_PATH% %GLEW_LIBRARY_PATH%
+set SDL2=%LIBPATH%/SDL2/lib/
+set GLEW=%LIBPATH%/GLEW/lib/Release/x64
+set ASSIMP=%LIBPATH%/Assimp/lib/x64
+set LIB_PATHS=%SDL2% %GLEW%
 
 
 
-set LINKED_LIBS=user32.lib shell32.lib OpenGL32.lib GLu32.lib glew32.lib SDL2main.lib SDL2.lib
-set LINKER_FLAGS=/link %LIB_PATHS% %LINKED_LIBS% /SUBSYSTEM:WINDOWS /time+
+set LINKED_LIBS= shell32.lib OpenGL32.lib glew32.lib SDL2main.lib SDL2.lib
+set LINKER_FLAGS=/link %LIB_PATHS% %LINKED_LIBS% /SUBSYSTEM:WINDOWS /time
 
 if not exist build (mkdir build)
 pushd build
 
-cl %COMPILER_FLAGS% /Fe:prog.exe %CODE% %INCLUDES% %LINKER_FLAGS%
+cl %COMPILER_FLAGS% /Fe:prog.exe ../code/*.cpp %INCLUDES% %LINKER_FLAGS%
 
 popd
