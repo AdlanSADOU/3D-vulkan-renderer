@@ -77,8 +77,9 @@ extern int main(int argc, char **argv)
     SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 16);
 
     SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
-    // SDL_GL_SetAttribute(SDL_GL_MULTISAMPLEBUFFERS, 1);
-    // SDL_GL_SetAttribute(SDL_GL_MULTISAMPLESAMPLES, 1);
+    SDL_GL_SetAttribute(SDL_GL_MULTISAMPLEBUFFERS, 1);
+    SDL_GL_SetAttribute(SDL_GL_MULTISAMPLESAMPLES, 8);
+
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
 
     int           window_flags = SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE;
@@ -195,7 +196,7 @@ extern int main(int argc, char **argv)
         float startTicks = SDL_GetTicks();
 
 
-        glClearColor(.3f, .3f, .4, 1.f);
+        glClearColor(.18f, .18f, .18f, 1.f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         // ExampleSpriteUpdateDraw(dt, input);
         Example3DUpdateDraw(dt, input);

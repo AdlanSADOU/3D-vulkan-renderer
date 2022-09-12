@@ -37,8 +37,8 @@ std::vector<Entity> entities {};
 
 void Example3DInit()
 {
-    camera.CameraCreate({ 0, 200, 150 }, 45.f, WND_WIDTH / (float)WND_HEIGHT, .8f, 1000.f);
-    camera._pitch = -60;
+    camera.CameraCreate({ 0, 40, 150 }, 45.f, WND_WIDTH / (float)WND_HEIGHT, .8f, 4000.f);
+    camera._pitch = -25;
     gCameraInUse  = &camera;
 
 
@@ -62,25 +62,28 @@ void Example3DInit()
 
 
 
-    entities.resize(2);
+    entities.resize(20);
     for (size_t i = 0; i < entities.size(); i++) {
-        static float z                   = 0;
-        static float x                   = 0;
-        int          distanceFactor      = 24;
-        int          max_entities_on_row = 9;
+        static float z = 0;
+        static float x = 0;
+
+        int   distanceFactor      = 24;
+        int   max_entities_on_row = 9;
+        float startingOffset      = 0.f;
 
         if (i > 0) x++;
         if (x == max_entities_on_row) {
             x = 0;
             z++;
         }
+
         entities[i].model.Create("assets/capoera.gltf"); // todo: if for some reason this fails to load
         // then the following line will crash
         entities[i].model._meshes[0]._materials[0] = gMaterials["mileMaterial"];
-        entities[i].model._transform.translation   = { -100.f + x * distanceFactor, 0.f, -100.f + z * distanceFactor };
+        entities[i].model._transform.translation   = { startingOffset + x * distanceFactor, 0.f, startingOffset + z * distanceFactor };
         entities[i].model._transform.rotation      = { 0.f, 0.f, 0.f };
         entities[i].model._transform.scale         = .1f;
-        entities[i].model.currentAnimation         = &entities[i].model._animations[0];
+        entities[i].model.currentAnimation         = &entities[i].model._animations[i%2];
     }
 
     ground.material = gMaterials["groundMaterial"];

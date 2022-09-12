@@ -24,7 +24,7 @@ vec2 uv[] = {
 
 void main()
 {
-    gl_Position = proj * view * vec4(verts[indices[gl_VertexID]].xyz * 100, 1);
+    gl_Position = proj * view * vec4(verts[indices[gl_VertexID]].xyz * 1000, 1);
     texCoord = uv[gl_VertexID];
 }
 #VERT_END
@@ -41,7 +41,7 @@ uniform sampler2D texSampler;
 
 void main()
 {
-    FragColor = texture(texSampler, texCoord * 1);
+    FragColor = texture(texSampler, texCoord*60) * vec4(1,1,1, gl_FragCoord.w*400/*distance fog effect hack*/);
     // FragColor = vec4(1,0,0,1);
 }
 
