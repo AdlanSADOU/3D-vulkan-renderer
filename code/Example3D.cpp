@@ -42,6 +42,7 @@ void Example3DInit()
     gCameraInUse  = &camera;
 
 
+    gTextures.insert({ "warrior", TextureCreate("assets/warrior/MaleBruteA_Body_diffuse.png") });
     gTextures.insert({ "CesiumMan", TextureCreate("assets/CesiumMan_img0.jpg") });
     gTextures.insert({ "brick_wall", TextureCreate("assets/brick_wall.jpg") });
     gTextures.insert({ "cs_blend_red Base Color", TextureCreate("assets/cs_blend_red Base Color.png") });
@@ -54,6 +55,7 @@ void Example3DInit()
 
     // todo: cache shaders in MaterialCreate
     gMaterials.insert({ "standard", MaterialCreate("shaders/point.shader", NULL) });
+    gMaterials.insert({ "warrior", MaterialCreate("shaders/standard.shader", gTextures["warrior"]) });
     gMaterials.insert({ "CesiumMan", MaterialCreate("shaders/standard.shader", gTextures["CesiumMan"]) });
     gMaterials.insert({ "mileMaterial", MaterialCreate("shaders/standard.shader", gTextures["ground"]) });
     gMaterials.insert({ "cubeMaterial", MaterialCreate("shaders/standard.shader", gTextures["cube"]) });
@@ -62,7 +64,7 @@ void Example3DInit()
 
 
 
-    entities.resize(80);
+    entities.resize(1);
     for (size_t i = 0; i < entities.size(); i++) {
         static float z = 0;
         static float x = 0;
@@ -77,9 +79,9 @@ void Example3DInit()
             z++;
         }
 
-        entities[i].model.Create("assets/capoera.gltf"); // todo: if for some reason this fails to load
+        entities[i].model.Create("assets/warrior/warrior.gltf"); // todo: if for some reason this fails to load
         // then the following line will crash
-        entities[i].model._meshes[0]._materials[0] = gMaterials["mileMaterial"];
+        entities[i].model._meshes[0]._materials[0] = gMaterials["warrior"];
         entities[i].model._transform.translation   = { startingOffset + x * distanceFactor, 0.f, startingOffset + z * distanceFactor };
         entities[i].model._transform.rotation      = { 0.f, 0.f, 0.f };
         entities[i].model._transform.scale         = .1f;
@@ -119,7 +121,7 @@ void Example3DUpdateDraw(float dt, Input input)
     // Entities
     //
     for (size_t i = 0; i < entities.size(); i++) {
-        // entities[i].model.AnimationUpdate(dt);
+        entities[i].model.AnimationUpdate(dt);
         entities[i].model.Draw();
     }
 }

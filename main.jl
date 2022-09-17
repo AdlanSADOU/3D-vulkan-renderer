@@ -1,3 +1,4 @@
+using LinearAlgebra
 
 function TwoJointsSingleInfluence()
     # bind pose ------------
@@ -104,4 +105,6 @@ end
 
 
 # TwoJointsSingleInfluence()
-TwoJoints2Influences()
+# TwoJoints2Influences()
+
+display(dot([.5,.5], [.2,.8]))

@@ -1,14 +1,12 @@
 @echo off
 
 if %1 == Debug (
-    echo %1
-    set COMPILER_FLAGS= -FC -GR- -EHa- -EHsc -EHs -nologo  -MP -std:c++latest /MT /O2
+        echo %1
+        set COMPILER_FLAGS= -FC -GR- -EHa- -EHsc -EHs -nologo -Zi -Zf -MP -std:c++latest /MTd
     ) ELSE IF %1 == Release (
-    echo %1 
-    set COMPILER_FLAGS= -FC -GR- -EHa- -EHsc -EHs -nologo -Zi -Zf -MP -std:c++latest /MTd
-    )
-
-
+        echo %1
+        set COMPILER_FLAGS= -FC -GR- -EHa- -EHsc -EHs -nologo  -MP -std:c++latest /MT /O2
+    ) 
 set VENDOR=../vendor
 
 set ASSIMP=/I %VENDOR%/Assimp/include

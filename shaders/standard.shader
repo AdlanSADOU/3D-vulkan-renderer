@@ -9,6 +9,7 @@ layout (location = 4) in vec4 vWeights;
 
 out vec2 texCoord;
 out vec4 color;
+out vec3 normals;
 
 uniform mat4 projection;
 uniform mat4 view;
@@ -29,6 +30,7 @@ void main()
 
     gl_Position = modelViewProj * skinMatrix * vec4(vPos, 1.0f);
     texCoord = vTex;
+    normals =  vNormals;
     // color = vec4(1,1,1,1);
 }
 
@@ -40,6 +42,7 @@ void main()
 // in vec4 inColor;
 in vec2 texCoord;
 in vec4 color;
+in vec3 normals;
 
 out vec4 FragColor;
 
@@ -49,7 +52,8 @@ void main()
 {
     // FragColor = mix(texture(texSampler, texCoord), texture(texSampler1, texCoord), 0.2) * inColor;
     // FragColor = texture(texSampler, texCoord) * inColor;
-    FragColor = texture(texSampler, texCoord) * vec4(1., .4, 1., 1.)*4;
+    // FragColor = texture(texSampler, texCoord) * vec4(1., .4, 1., 1.)*4;
+    FragColor = texture(texSampler, texCoord) * vec4(normals, 1.)*2;
 }
 
 #FRAG_END

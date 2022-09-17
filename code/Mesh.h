@@ -253,6 +253,7 @@ struct SkinnedModel
         std::vector<uint32_t>   _VAOs           = {};
         std::vector<uint64_t>   _indicesCount   = {};
         std::vector<uint64_t>   _indicesOffsets = {};
+        std::string             name;
     };
 
     std::vector<skinnedMesh> _meshes = {};
@@ -261,10 +262,9 @@ struct SkinnedModel
     Transform                _transform       = {};
     void                    *_data            = {}; // opaque handle to cgltf_data
     uint32_t                 _DataBufferID    = {};
-
-    void Create(const char *path);
-    void AnimationUpdate(float dt);
-    void Draw();
+    void                     Create(const char *path);
+    void                     AnimationUpdate(float dt);
+    void                     Draw();
 };
 
 void SkinnedModel::Draw()
@@ -282,13 +282,14 @@ void SkinnedModel::Draw()
     ShaderSetMat4ByName("projection", gCameraInUse->_projection, material->_shader->programID);
     ShaderSetMat4ByName("view", gCameraInUse->_view, material->_shader->programID);
     ShaderSetMat4ByName("model", model, material->_shader->programID);
-    ShaderSetMat4ByName("finalPoseJointMatrices", currentAnimation->finalPoseJointMatrices[0], currentAnimation->finalPoseJointMatrices.size(), material->_shader->programID);
+    if (_animations.size() > 0)
+        ShaderSetMat4ByName("finalPoseJointMatrices", currentAnimation->finalPoseJointMatrices[0], currentAnimation->finalPoseJointMatrices.size(), material->_shader->programID);
 
     glBindTexture(GL_TEXTURE_2D, material->_texture->id);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, _DataBufferID);
 
     for (size_t mesh_idx = 0; mesh_idx < this->_meshes.size(); mesh_idx++) {
-        for (size_t submesh_idx = 0; submesh_idx < this->_meshes.size(); submesh_idx++) {
+        for (size_t submesh_idx = 0; submesh_idx < this->_meshes[mesh_idx]._VAOs.size(); submesh_idx++) {
             glBindVertexArray(_meshes[mesh_idx]._VAOs[submesh_idx]);
             glDrawElements(GL_TRIANGLES, _meshes[mesh_idx]._indicesCount[submesh_idx], GL_UNSIGNED_SHORT, (void *)_meshes[mesh_idx]._indicesOffsets[submesh_idx]);
         }

@@ -37,6 +37,7 @@ static Texture *TextureCreate(const char *path)
     else if (t->channelCount == 3)
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, t->width, t->height, 0, GL_RGB, GL_UNSIGNED_BYTE, pixels);
     glGenerateMipmap(GL_TEXTURE_2D);
+    glBindTexture(GL_TEXTURE_2D, 0);
     stbi_image_free(pixels);
 
     return t;
