@@ -53,7 +53,7 @@ void main()
     // FragColor = mix(texture(texSampler, texCoord), texture(texSampler1, texCoord), 0.2) * inColor;
     // FragColor = texture(texSampler, texCoord) * inColor;
     // FragColor = texture(texSampler, texCoord) * vec4(1., .4, 1., 1.)*4;
-    FragColor = texture(texSampler, texCoord) * vec4(normals, 1.)*2;
+    FragColor = vec4(normals, 1.);
 }
 
 #FRAG_END

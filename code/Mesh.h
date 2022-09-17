@@ -282,16 +282,16 @@ void SkinnedModel::Draw()
     ShaderSetMat4ByName("projection", gCameraInUse->_projection, material->_shader->programID);
     ShaderSetMat4ByName("view", gCameraInUse->_view, material->_shader->programID);
     ShaderSetMat4ByName("model", model, material->_shader->programID);
-    if (_animations.size() > 0)
-        ShaderSetMat4ByName("finalPoseJointMatrices", currentAnimation->finalPoseJointMatrices[0], currentAnimation->finalPoseJointMatrices.size(), material->_shader->programID);
+    ShaderSetMat4ByName("finalPoseJointMatrices", currentAnimation->finalPoseJointMatrices[0], currentAnimation->finalPoseJointMatrices.size(), material->_shader->programID);
+
 
     glBindTexture(GL_TEXTURE_2D, material->_texture->id);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, _DataBufferID);
-
     for (size_t mesh_idx = 0; mesh_idx < this->_meshes.size(); mesh_idx++) {
         for (size_t submesh_idx = 0; submesh_idx < this->_meshes[mesh_idx]._VAOs.size(); submesh_idx++) {
             glBindVertexArray(_meshes[mesh_idx]._VAOs[submesh_idx]);
             glDrawElements(GL_TRIANGLES, _meshes[mesh_idx]._indicesCount[submesh_idx], GL_UNSIGNED_SHORT, (void *)_meshes[mesh_idx]._indicesOffsets[submesh_idx]);
+            glBindVertexArray(0);
         }
     }
 }
@@ -409,10 +409,10 @@ void SkinnedModel::Create(const char *path)
             _meshes[mesh_idx]._indicesCount[submesh_idx]   = primitive->indices->count;
         }
 
-        // glBindVertexArray(0);
-        // glBindBuffer(GL_ARRAY_BUFFER, 0);
-        // glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
     }
+        glBindVertexArray(0);
+        glBindBuffer(GL_ARRAY_BUFFER, 0);
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 
     // if no animations to handle, we just end here
     if (!data->animations_count) return;

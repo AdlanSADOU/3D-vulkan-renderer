@@ -64,7 +64,7 @@ void Example3DInit()
 
 
 
-    entities.resize(1);
+    entities.resize(2);
     for (size_t i = 0; i < entities.size(); i++) {
         static float z = 0;
         static float x = 0;
@@ -79,13 +79,23 @@ void Example3DInit()
             z++;
         }
 
-        entities[i].model.Create("assets/warrior/warrior.gltf"); // todo: if for some reason this fails to load
-        // then the following line will crash
-        entities[i].model._meshes[0]._materials[0] = gMaterials["warrior"];
-        entities[i].model._transform.translation   = { startingOffset + x * distanceFactor, 0.f, startingOffset + z * distanceFactor };
-        entities[i].model._transform.rotation      = { 0.f, 0.f, 0.f };
-        entities[i].model._transform.scale         = .1f;
-        entities[i].model.currentAnimation         = &entities[i].model._animations[i%2];
+        if (i == 0) {
+            entities[i].model.Create("assets/warrior/warrior.gltf"); // todo: if for some reason this fails to load
+            // then the following line will crash
+            entities[i].model._meshes[0]._materials[0] = gMaterials["warrior"];
+            entities[i].model._transform.translation   = { startingOffset + x * distanceFactor, 0.f, startingOffset + z * distanceFactor };
+            entities[i].model._transform.rotation      = { 0.f, 0.f, 0.f };
+            entities[i].model._transform.scale         = .1f;
+            entities[i].model.currentAnimation         = &entities[i].model._animations[0];
+        } else {
+            entities[i].model.Create("assets/capoera.gltf"); // todo: if for some reason this fails to load
+            // then the following line will crash
+            entities[i].model._meshes[0]._materials[0] = gMaterials["warrior"];
+            entities[i].model._transform.translation   = { startingOffset + x * distanceFactor, 0.f, startingOffset + z * distanceFactor };
+            entities[i].model._transform.rotation      = { 0.f, 0.f, 0.f };
+            entities[i].model._transform.scale         = .1f;
+            entities[i].model.currentAnimation         = &entities[i].model._animations[i % 2];
+        }
     }
 
     ground.material = gMaterials["groundMaterial"];
