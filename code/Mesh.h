@@ -254,12 +254,13 @@ struct SkinnedModel
         std::vector<uint64_t>   _indicesCount   = {};
         std::vector<uint64_t>   _indicesOffsets = {};
         std::string             name;
+        bool                    hidden = {};
     };
 
     std::vector<skinnedMesh> _meshes = {};
     std::vector<Animation>   _animations;
     Animation               *currentAnimation = {};
-    Transform                _transform       = {};
+    Transform                _transform       = {}; // note: we do not load the exported transform
     void                    *_data            = {}; // opaque handle to cgltf_data
     uint32_t                 _DataBufferID    = {};
     void                     Create(const char *path);
@@ -272,9 +273,9 @@ void SkinnedModel::Draw()
     glm::mat4 model = glm::mat4(1);
 
     model = glm::translate(model, _transform.translation)
-        * glm::rotate(model, (Radians(_transform.rotation.x)), glm::vec3(1, 0, 0))
-        * glm::rotate(model, (Radians(_transform.rotation.y)), glm::vec3(0, 1, 0))
         * glm::rotate(model, (Radians(_transform.rotation.z)), glm::vec3(0, 0, 1))
+        * glm::rotate(model, (Radians(_transform.rotation.y)), glm::vec3(0, 1, 0))
+        * glm::rotate(model, (Radians(_transform.rotation.x)), glm::vec3(1, 0, 0))
         * glm::scale(model, glm::vec3(_transform.scale));
 
     Material *material = _meshes[0]._materials[0];
@@ -282,12 +283,16 @@ void SkinnedModel::Draw()
     ShaderSetMat4ByName("projection", gCameraInUse->_projection, material->_shader->programID);
     ShaderSetMat4ByName("view", gCameraInUse->_view, material->_shader->programID);
     ShaderSetMat4ByName("model", model, material->_shader->programID);
-    ShaderSetMat4ByName("finalPoseJointMatrices", currentAnimation->finalPoseJointMatrices[0], currentAnimation->finalPoseJointMatrices.size(), material->_shader->programID);
+    if (_animations.size() > 0 && currentAnimation)
+        ShaderSetMat4ByName("finalPoseJointMatrices", currentAnimation->finalPoseJointMatrices[0], currentAnimation->finalPoseJointMatrices.size(), material->_shader->programID);
 
 
     glBindTexture(GL_TEXTURE_2D, material->_texture->id);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, _DataBufferID);
     for (size_t mesh_idx = 0; mesh_idx < this->_meshes.size(); mesh_idx++) {
+
+        if (_meshes[mesh_idx].hidden) continue;
+
         for (size_t submesh_idx = 0; submesh_idx < this->_meshes[mesh_idx]._VAOs.size(); submesh_idx++) {
             glBindVertexArray(_meshes[mesh_idx]._VAOs[submesh_idx]);
             glDrawElements(GL_TRIANGLES, _meshes[mesh_idx]._indicesCount[submesh_idx], GL_UNSIGNED_SHORT, (void *)_meshes[mesh_idx]._indicesOffsets[submesh_idx]);
@@ -373,7 +378,7 @@ void SkinnedModel::Create(const char *path)
             glBindVertexArray(_meshes[mesh_idx]._VAOs[submesh_idx]);
             glBindBuffer(GL_ARRAY_BUFFER, _DataBufferID);
 
-            for (size_t attrib_idx = 0; attrib_idx < data->meshes->primitives->attributes_count; attrib_idx++) {
+            for (size_t attrib_idx = 0; attrib_idx < primitives->attributes_count; attrib_idx++) {
                 cgltf_attribute   *attrib = primitives[submesh_idx].attributes + attrib_idx;
                 cgltf_buffer_view *view   = attrib->data->buffer_view;
 
@@ -408,11 +413,10 @@ void SkinnedModel::Create(const char *path)
             _meshes[mesh_idx]._indicesOffsets[submesh_idx] = primitive->indices->buffer_view->offset;
             _meshes[mesh_idx]._indicesCount[submesh_idx]   = primitive->indices->count;
         }
-
     }
-        glBindVertexArray(0);
-        glBindBuffer(GL_ARRAY_BUFFER, 0);
-        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+    glBindVertexArray(0);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 
     // if no animations to handle, we just end here
     if (!data->animations_count) return;
@@ -445,7 +449,12 @@ void SkinnedModel::Create(const char *path)
 
 void SkinnedModel::AnimationUpdate(float dt)
 {
+    if (!currentAnimation) {
+        SDL_Log("CurrentAnimation not set");
+        return;
+    }
     assert(currentAnimation->duration > 0);
+
     cgltf_animation *anim = (cgltf_animation *)currentAnimation->handle;
 
     currentAnimation->globalTimer += dt;
