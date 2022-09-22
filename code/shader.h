@@ -2,9 +2,6 @@
 
 #include <GL/glew.h>
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
 
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
@@ -13,7 +10,6 @@
 #include "mymath.h"
 
 #define LOG_SHADER_SOURCE 0
-static size_t strContains(size_t fromOffset, const char *str, size_t strLength, char *src, size_t srcLength);
 
 struct Shader
 {
@@ -201,9 +197,15 @@ void ShaderSetMat4ByName(const char *name, glm::mat4 &matrix, GLsizei count, GLu
     glUniformMatrix4fv(location, count, GL_FALSE, glm::value_ptr(matrix));
 }
 
-void SetUniformMatrix4Name(const char *name, const Matrix4 matrix, GLuint programID)
+void ShaderSetUniformMatrix4Name(const char *name, const Matrix4 matrix, GLuint programID)
 {
     // we could just hardcode locations to avoid querrying for names each frame..
     GLint location = GetUniformLocation(name, programID);
     glUniformMatrix4fv(location, 1, GL_FALSE, matrix.m);
+}
+
+void ShaderSetUniformVec3ByName(const char *name, const glm::vec3 *v, GLuint programID)
+{
+    GLint location = GetUniformLocation(name, programID);
+    glUniform3fv(location, 1, (float *)v);
 }

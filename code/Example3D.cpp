@@ -37,7 +37,7 @@ std::vector<Entity> entities {};
 
 void Example3DInit()
 {
-    camera.CameraCreate({ 0, 40, 150 }, 45.f, WND_WIDTH / (float)WND_HEIGHT, .8f, 4000.f);
+    camera.CameraCreate({ 0, 40, 50 }, 45.f, WND_WIDTH / (float)WND_HEIGHT, .8f, 4000.f);
     camera._pitch = -25;
     gCameraInUse  = &camera;
 
@@ -55,16 +55,12 @@ void Example3DInit()
 
     // todo: cache shaders in MaterialCreate
     gMaterials.insert({ "standard", MaterialCreate("shaders/point.shader", NULL) });
-    gMaterials.insert({ "warrior", MaterialCreate("shaders/standard.shader", gTextures["warrior"]) });
-    gMaterials.insert({ "CesiumMan", MaterialCreate("shaders/standard.shader", gTextures["CesiumMan"]) });
-    gMaterials.insert({ "mileMaterial", MaterialCreate("shaders/standard.shader", gTextures["ground"]) });
-    gMaterials.insert({ "cubeMaterial", MaterialCreate("shaders/standard.shader", gTextures["cube"]) });
-    gMaterials.insert({ "chibiMaterial", MaterialCreate("shaders/standard.shader", gTextures["cs_blend_red Base Color"]) });
+    gMaterials.insert({ "warrior", MaterialCreate("shaders/standard.shader", gTextures["ground"]) });
     gMaterials.insert({ "groundMaterial", MaterialCreate("shaders/ground.shader", gTextures["ground"]) });
 
 
 
-    entities.resize(1);
+    entities.resize(14);
     for (size_t i = 0; i < entities.size(); i++) {
         static float z = 0;
         static float x = 0;
@@ -79,24 +75,23 @@ void Example3DInit()
             z++;
         }
 
-        if (i == 0) {
+        if (1)
+        {
             entities[i].model.Create("assets/warrior/warrior.gltf"); // todo: if for some reason this fails to load
             // then the following line will crash
-            entities[i].model._meshes[0]._materials[0] = gMaterials["warrior"];
             entities[i].model._transform.translation = { startingOffset + x * distanceFactor, 0.f, startingOffset + z * distanceFactor };
             entities[i].model._transform.rotation    = { 0.f, 0.f, 0.f };
             entities[i].model._transform.scale       = 0.1f;
             entities[i].model.currentAnimation       = &entities[i].model._animations[0];
+        } else {
+            entities[i].model.Create("assets/capoera.gltf"); // todo: if for some reason this fails to load
+            // then the following line will crash
+            entities[i].model._meshes[0]._materials[0] = gMaterials["warrior"];
+            entities[i].model._transform.translation   = { startingOffset + x * distanceFactor, 0.f, startingOffset + z * distanceFactor };
+            entities[i].model._transform.rotation      = { 0.f, 0.f, 0.f };
+            entities[i].model._transform.scale         = .1f;
+            entities[i].model.currentAnimation         = &entities[i].model._animations[i % 2];
         }
-        // else {
-        //     entities[i].model.Create("assets/capoera.gltf"); // todo: if for some reason this fails to load
-        //     // then the following line will crash
-        //     entities[i].model._meshes[0]._materials[0] = gMaterials["warrior"];
-        //     entities[i].model._transform.translation   = { startingOffset + x * distanceFactor, 0.f, startingOffset + z * distanceFactor };
-        //     entities[i].model._transform.rotation      = { 0.f, 0.f, 0.f };
-        //     entities[i].model._transform.scale         = .1f;
-        //     entities[i].model.currentAnimation         = &entities[i].model._animations[i % 2];
-        // }
     }
 
     ground.material = gMaterials["groundMaterial"];
@@ -124,10 +119,12 @@ void Example3DUpdateDraw(float dt, Input input)
     ShaderSetMat4ByName("proj", gCameraInUse->_projection, ground.material->_shader->programID);
     ShaderSetMat4ByName("view", gCameraInUse->_view, ground.material->_shader->programID);
 
-    glBindTexture(GL_TEXTURE_2D, ground.material->_texture->id);
+    glBindTexture(GL_TEXTURE_2D, ground.material->baseColorMap->id);
     glBindVertexArray(ground.VAO);
     glDrawArrays(GL_TRIANGLES, 0, 6);
 
+    glBindTexture(GL_TEXTURE_2D, 0);
+    glUseProgram(0);
     //
     // Entities
     //

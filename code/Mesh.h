@@ -1,6 +1,5 @@
 #pragma once
 
-
 struct Vertex
 {
     glm::vec3 position;
@@ -60,10 +59,10 @@ static std::vector<uint16_t> cube_indices = {
 
 struct Material
 {
+    char   *name {};
     Shader *_shader {};
 
-    // todo(ad): we might want multiple textures
-    Texture *_texture {};
+    Texture *baseColorMap {};
 };
 
 static Material *MaterialCreate(const char *shaderPath, Texture *texture)
@@ -71,7 +70,7 @@ static Material *MaterialCreate(const char *shaderPath, Texture *texture)
     Material *m = (Material *)malloc(sizeof(Material));
     assert(m);
 
-    m->_texture = texture;
+    m->baseColorMap = texture;
 
     if (!(m->_shader = LoadShader(shaderPath))) {
         SDL_Log("shader prog failed\n");
@@ -249,13 +248,16 @@ struct SkinnedModel
 {
     struct skinnedMesh
     {
-        std::vector<Material *> _materials      = {};
+        std::vector<Material *> _materials      = {}; // todo: store an index instead of a ptr
         std::vector<uint32_t>   _VAOs           = {};
         std::vector<uint64_t>   _indicesCount   = {};
         std::vector<uint64_t>   _indicesOffsets = {};
         std::string             name;
-        bool                    hidden = {};
+        char                   *textureKeyBaseColor = {};
+
+        bool hidden = {};
     };
+    char *assetFolder = {};
 
     std::vector<skinnedMesh> _meshes = {};
     std::vector<Animation>   _animations;
@@ -278,27 +280,42 @@ void SkinnedModel::Draw()
         * glm::rotate(model, (Radians(_transform.rotation.x)), glm::vec3(1, 0, 0))
         * glm::scale(model, glm::vec3(_transform.scale));
 
-    Material *material = _meshes[0]._materials[0];
-    ShaderUse(material->_shader->programID);
-    ShaderSetMat4ByName("projection", gCameraInUse->_projection, material->_shader->programID);
-    ShaderSetMat4ByName("view", gCameraInUse->_view, material->_shader->programID);
-    ShaderSetMat4ByName("model", model, material->_shader->programID);
-    if (_animations.size() > 0 && currentAnimation)
-        ShaderSetMat4ByName("finalPoseJointMatrices", currentAnimation->finalPoseJointMatrices[0], currentAnimation->finalPoseJointMatrices.size(), material->_shader->programID);
 
-
-    glBindTexture(GL_TEXTURE_2D, material->_texture->id);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, _DataBufferID);
+
     for (size_t mesh_idx = 0; mesh_idx < this->_meshes.size(); mesh_idx++) {
 
         if (_meshes[mesh_idx].hidden) continue;
 
         for (size_t submesh_idx = 0; submesh_idx < this->_meshes[mesh_idx]._VAOs.size(); submesh_idx++) {
+
+            Material *material = _meshes[mesh_idx]._materials[submesh_idx];
+            ShaderUse(material->_shader->programID);
+            ShaderSetMat4ByName("projection", gCameraInUse->_projection, material->_shader->programID);
+            ShaderSetMat4ByName("view", gCameraInUse->_view, material->_shader->programID);
+            ShaderSetMat4ByName("model", model, material->_shader->programID);
+            ShaderSetUniformVec3ByName("view_pos", &gCameraInUse->_position, material->_shader->programID);
+
+            static float phi = 0;
+            phi += 0.001;
+            glm::vec3 lightDir = { cosf(phi), -.5, sinf(phi) };
+            ShaderSetUniformVec3ByName("light_dir", &lightDir, material->_shader->programID);
+
+            if (_animations.size() > 0 && currentAnimation)
+                ShaderSetMat4ByName("finalPoseJointMatrices", currentAnimation->finalPoseJointMatrices[0], currentAnimation->finalPoseJointMatrices.size(), material->_shader->programID);
+            // bind textures here
+
+            glActiveTexture(GL_TEXTURE0);
+            glBindTexture(GL_TEXTURE_2D, material->baseColorMap->id);
+
             glBindVertexArray(_meshes[mesh_idx]._VAOs[submesh_idx]);
             glDrawElements(GL_TRIANGLES, _meshes[mesh_idx]._indicesCount[submesh_idx], GL_UNSIGNED_SHORT, (void *)_meshes[mesh_idx]._indicesOffsets[submesh_idx]);
             glBindVertexArray(0);
         }
     }
+
+    glBindTexture(GL_TEXTURE_2D, 0);
+    glUseProgram(0);
 }
 
 void SkinnedModel::Create(const char *path)
@@ -324,6 +341,7 @@ void SkinnedModel::Create(const char *path)
     }
 
     _data = (void *)data;
+    GetPathFolder(&assetFolder, path, strlen(path));
 
     // todo: we do take yet take into account the exported model transform of the mesh
 
@@ -336,28 +354,9 @@ void SkinnedModel::Create(const char *path)
     // we allocate for the entire .bin which contains more stuff than just primitives & indices
     size_t total_data_size_for_current_submesh = data->buffers->size;
 
-
-
-    // for (size_t mesh_idx = 0; mesh_idx < data->meshes_count; mesh_idx++) {
-    //     size_t           submeshCount = data->meshes[mesh_idx].primitives_count;
-    //     cgltf_primitive *primitives   = data->meshes[mesh_idx].primitives;
-    //     primitives->mappings->variant;
-    //     for (size_t submesh_idx = 0; submesh_idx < submeshCount; submesh_idx++) {
-
-    //         cgltf_primitive *primitive = primitives + submesh_idx;
-    //         for (size_t i = 0; i < primitive->attributes_count; i++) {
-    //             total_data_size_for_current_submesh += primitive->attributes[i].data->buffer_view->size;
-    //         }
-    //         total_data_size_for_current_submesh += primitive->indices->buffer_view->size;
-    //     }
-    // }
-    // note: if a model has multiple meshes, assuming that multiple meshes share the same data blob at different offsets
-    // this assert should then fire
-    // assert(total_data_size_for_current_submesh == primitives->attributes->data->buffer_view->buffer->size);
     glBufferData(GL_ARRAY_BUFFER, total_data_size_for_current_submesh, 0, GL_DYNAMIC_DRAW);
-
-
     size_t totalSize = 0;
+
     _meshes.resize(data->meshes_count);
     for (size_t mesh_idx = 0; mesh_idx < data->meshes_count; mesh_idx++) {
         cgltf_primitive *primitives = data->meshes[mesh_idx].primitives;
@@ -368,8 +367,6 @@ void SkinnedModel::Create(const char *path)
         _meshes[mesh_idx]._indicesOffsets.resize(submeshCount);
         _meshes[mesh_idx]._materials.resize(submeshCount);
 
-
-
         glGenVertexArrays(submeshCount, &_meshes[mesh_idx]._VAOs[0]);
 
         for (size_t submesh_idx = 0; submesh_idx < submeshCount; submesh_idx++) {
@@ -378,11 +375,13 @@ void SkinnedModel::Create(const char *path)
             glBindVertexArray(_meshes[mesh_idx]._VAOs[submesh_idx]);
             glBindBuffer(GL_ARRAY_BUFFER, _DataBufferID);
 
+            // we only ever loop once through the primitives
             for (size_t attrib_idx = 0; attrib_idx < primitives->attributes_count; attrib_idx++) {
                 cgltf_attribute   *attrib = primitives[submesh_idx].attributes + attrib_idx;
                 cgltf_buffer_view *view   = attrib->data->buffer_view;
 
                 glBufferSubData(GL_ARRAY_BUFFER, view->offset, view->size, (void *)((uint8_t *)view->buffer->data + view->offset));
+
                 totalSize += view->size;
                 if (attrib->type == cgltf_attribute_type_position) {
                     glEnableVertexAttribArray(0);
@@ -390,19 +389,23 @@ void SkinnedModel::Create(const char *path)
                 } else if (attrib->type == cgltf_attribute_type_normal) {
                     glEnableVertexAttribArray(1);
                     glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 0, (void *)view->offset);
-                } else if (attrib->type == cgltf_attribute_type_texcoord) {
+                } else if (attrib->type == cgltf_attribute_type_texcoord && strcmp(attrib->name, "TEXCOORD_0") == 0) {
                     glEnableVertexAttribArray(2);
                     glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 0, (void *)view->offset);
-                } else if (attrib->type == cgltf_attribute_type_joints) {
-                    glm::vec4 *w = (glm::vec4 *)((char *)view->buffer->data + view->offset);
-                    // SDL_Log("weight:[%d, %d, %d, %d]", w.x, w.y, w.z, w.w);
+                } else if (attrib->type == cgltf_attribute_type_texcoord && strcmp(attrib->name, "TEXCOORD_1") == 0) {
                     glEnableVertexAttribArray(3);
-                    glVertexAttribPointer(3, 4, GL_UNSIGNED_BYTE, GL_FALSE, 0, (void *)view->offset);
-                } else if (attrib->type == cgltf_attribute_type_weights) {
+                    glVertexAttribPointer(3, 2, GL_FLOAT, GL_FALSE, 0, (void *)view->offset);
+                } else if (attrib->type == cgltf_attribute_type_joints) {
                     glEnableVertexAttribArray(4);
-                    glVertexAttribPointer(4, 4, GL_FLOAT, GL_FALSE, 0, (void *)view->offset);
+                    glVertexAttribPointer(4, 4, GL_UNSIGNED_BYTE, GL_FALSE, 0, (void *)view->offset);
+                } else if (attrib->type == cgltf_attribute_type_weights) {
+                    glEnableVertexAttribArray(5);
+                    glVertexAttribPointer(5, 4, GL_FLOAT, GL_FALSE, 0, (void *)view->offset);
                 }
             }
+
+
+
             totalSize += primitive->indices->buffer_view->size;
             glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, _DataBufferID);
             glBufferSubData(GL_ELEMENT_ARRAY_BUFFER,
@@ -412,8 +415,55 @@ void SkinnedModel::Create(const char *path)
 
             _meshes[mesh_idx]._indicesOffsets[submesh_idx] = primitive->indices->buffer_view->offset;
             _meshes[mesh_idx]._indicesCount[submesh_idx]   = primitive->indices->count;
+
+
+            // Retrieve Texture info
+            // load textures into global map and store the ids
+
+
+
+            if (!primitive->material) {
+                _meshes[mesh_idx]._materials[submesh_idx] = gMaterials["warrior"];
+                continue;
+            };
+
+            auto mat = primitive->material;
+
+            if (mat->has_pbr_specular_glossiness) {
+                SDL_Log("[%s] has specular_glossiness workflow, which is not supported", data->meshes[mesh_idx].name);
+                continue;
+            } else if (mat->has_pbr_metallic_roughness) {
+                // mat->pbr_metallic_roughness.base_color_texture.texcoord;
+                if (mat->pbr_metallic_roughness.base_color_texture.texture) {
+
+                    if (mat->pbr_metallic_roughness.base_color_texture.texture->image->name) {
+                        cgltf_texture *texture = mat->pbr_metallic_roughness.base_color_texture.texture;
+
+                        // check if a texture by that name already exist in gTextures
+                        // if it does, material->texture = gTextures[name];
+                        // else load the texture into gTextures then material->texture = gTextures[name];
+
+
+                        if (gTextures.contains(std::string(texture->image->uri))) {
+                            _meshes[mesh_idx]._materials[submesh_idx] = MaterialCreate("shaders/standard.shader", gTextures[texture->image->uri]);
+                            SDL_Log("loading existing [%s] texture", texture->image->name);
+                        } else {
+                            // todo: sampler->min/mag and stuff
+                            // gTextures.insert({ texture->image->name, TextureCreate((std::string(assetFolder) + std::string(texture->image->uri)).c_str()) });
+                            auto t = TextureCreate((std::string(assetFolder) + std::string(texture->image->uri)).c_str());
+                            gTextures.insert({ std::string(texture->image->uri), t });
+                            _meshes[mesh_idx]._materials[submesh_idx] = MaterialCreate("shaders/standard.shader", t);
+                            SDL_Log("loading new [%s] texture", texture->image->uri);
+                        }
+                    }
+                } else {
+                    // set default material
+                    _meshes[mesh_idx]._materials[submesh_idx] = gMaterials["warrior"];
+                }
+            }
         }
     }
+
     glBindVertexArray(0);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
