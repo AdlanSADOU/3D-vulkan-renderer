@@ -19,22 +19,28 @@ uniform mat4 view;
 uniform mat4 model;
 
 uniform mat4 finalPoseJointMatrices[128];// might want to switch to SSBOs
-
+uniform int has_joint_matrices;
 
 
 void main()
 {
     // vec4 point = projectionGLM * vec4(1.0f, 1.0f, 1.0f, 1.0f);
     mat4 modelViewProj = projection * view * model;
+    mat4 skinMatrix = mat4(1);
 
-    mat4 skinMatrix =
-    WEIGHTS_0.x * finalPoseJointMatrices[uint(JOINTS_0.x)]+
-    WEIGHTS_0.y * finalPoseJointMatrices[uint(JOINTS_0.y)]+
-    WEIGHTS_0.z * finalPoseJointMatrices[uint(JOINTS_0.z)];
-    (1-WEIGHTS_0.x-WEIGHTS_0.y-WEIGHTS_0.z) * finalPoseJointMatrices[uint(JOINTS_0.w)];
+    if (has_joint_matrices == 1)
+    {
+        skinMatrix =
+        WEIGHTS_0.x * finalPoseJointMatrices[uint(JOINTS_0.x)]+
+        WEIGHTS_0.y * finalPoseJointMatrices[uint(JOINTS_0.y)]+
+        WEIGHTS_0.z * finalPoseJointMatrices[uint(JOINTS_0.z)];
+        (1-WEIGHTS_0.x-WEIGHTS_0.y-WEIGHTS_0.z) * finalPoseJointMatrices[uint(JOINTS_0.w)];
+    }
 
     gl_Position = modelViewProj * skinMatrix * vec4(POSITION, 1.0f);
     fragPos = (model * skinMatrix * vec4(POSITION, 1.0f)).xyz;
+
+
     texCoord_0 = TEXCOORD_0;
     // texCoord_1 = TEXCOORD_1;
     normal =  NORMAL;

@@ -42,31 +42,22 @@ void Example3DInit()
     gCameraInUse  = &camera;
 
 
-    gTextures.insert({ "warrior", TextureCreate("assets/warrior/MaleBruteA_Body_diffuse.png") });
-    gTextures.insert({ "CesiumMan", TextureCreate("assets/CesiumMan_img0.jpg") });
-    gTextures.insert({ "brick_wall", TextureCreate("assets/brick_wall.jpg") });
-    gTextures.insert({ "cs_blend_red Base Color", TextureCreate("assets/cs_blend_red Base Color.png") });
     gTextures.insert({ "ground", TextureCreate("assets/groundProto.png") });
-    gTextures.insert({ "cube", TextureCreate("assets/cube.png") });
-    gTextures.insert({ "Material-1", TextureCreate("assets/Material-1.png") });
-    gTextures.insert({ "Material-2", TextureCreate("assets/Material-2.png") });
-    gTextures.insert({ "Material", TextureCreate("assets/Material.png") });
-
 
     // todo: cache shaders in MaterialCreate
     gMaterials.insert({ "standard", MaterialCreate("shaders/point.shader", NULL) });
-    gMaterials.insert({ "warrior", MaterialCreate("shaders/standard.shader", gTextures["ground"]) });
+    gMaterials.insert({ "default", MaterialCreate("shaders/standard.shader", gTextures["ground"]) });
     gMaterials.insert({ "groundMaterial", MaterialCreate("shaders/ground.shader", gTextures["ground"]) });
 
 
 
-    entities.resize(14);
+    entities.resize(2);
     for (size_t i = 0; i < entities.size(); i++) {
         static float z = 0;
         static float x = 0;
 
         int   distanceFactor      = 24;
-        int   max_entities_on_row = 9;
+        int   max_entities_on_row = 12;
         float startingOffset      = 0.f;
 
         if (i > 0) x++;
@@ -75,22 +66,24 @@ void Example3DInit()
             z++;
         }
 
-        if (1)
-        {
+        if (i < 1) {
             entities[i].model.Create("assets/warrior/warrior.gltf"); // todo: if for some reason this fails to load
             // then the following line will crash
             entities[i].model._transform.translation = { startingOffset + x * distanceFactor, 0.f, startingOffset + z * distanceFactor };
             entities[i].model._transform.rotation    = { 0.f, 0.f, 0.f };
-            entities[i].model._transform.scale       = 0.1f;
-            entities[i].model.currentAnimation       = &entities[i].model._animations[0];
+            entities[i].model._transform.scale       = .1f;
+            entities[i].model._currentAnimation      = &entities[i].model._animations[0];
+            entities[i].model._shouldPlayAnimation   = true;
+
         } else {
             entities[i].model.Create("assets/capoera.gltf"); // todo: if for some reason this fails to load
             // then the following line will crash
-            entities[i].model._meshes[0]._materials[0] = gMaterials["warrior"];
+            entities[i].model._meshes[0]._materials[0] = gMaterials["default"];
             entities[i].model._transform.translation   = { startingOffset + x * distanceFactor, 0.f, startingOffset + z * distanceFactor };
             entities[i].model._transform.rotation      = { 0.f, 0.f, 0.f };
             entities[i].model._transform.scale         = .1f;
-            entities[i].model.currentAnimation         = &entities[i].model._animations[i % 2];
+            entities[i].model._currentAnimation        = &entities[i].model._animations[i % 2];
+            entities[i].model._shouldPlayAnimation     = false;
         }
     }
 
@@ -130,6 +123,6 @@ void Example3DUpdateDraw(float dt, Input input)
     //
     for (size_t i = 0; i < entities.size(); i++) {
         entities[i].model.AnimationUpdate(dt);
-        entities[i].model.Draw();
+        entities[i].model.Draw(dt);
     }
 }

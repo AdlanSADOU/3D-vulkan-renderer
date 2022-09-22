@@ -32,9 +32,13 @@
 
 struct Texture;
 struct Material;
+struct MeshData;
+struct Shader;
 
 static std::unordered_map<std::string, Texture *>  gTextures;
+static std::unordered_map<std::string, Shader *>   gShaders;
 static std::unordered_map<std::string, Material *> gMaterials;
+static std::unordered_map<std::string, void *>     gSharedMeshes;
 
 
 #define NB_OF_ELEMENTS_IN_ARRAY(arr) (sizeof(arr) / sizeof(arr[0]))

@@ -209,3 +209,9 @@ void ShaderSetUniformVec3ByName(const char *name, const glm::vec3 *v, GLuint pro
     GLint location = GetUniformLocation(name, programID);
     glUniform3fv(location, 1, (float *)v);
 }
+
+void ShaderSetUniformIntByName(const char *name, int *value, GLuint programID)
+{
+    GLint location = GetUniformLocation(name, programID);
+    glUniform1i(location, *value);
+}

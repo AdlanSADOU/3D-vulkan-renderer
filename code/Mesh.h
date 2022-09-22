@@ -59,9 +59,8 @@ static std::vector<uint16_t> cube_indices = {
 
 struct Material
 {
-    char   *name {};
-    Shader *_shader {};
-
+    char    *name {};
+    Shader  *_shader {};
     Texture *baseColorMap {};
 };
 
@@ -72,11 +71,18 @@ static Material *MaterialCreate(const char *shaderPath, Texture *texture)
 
     m->baseColorMap = texture;
 
-    if (!(m->_shader = LoadShader(shaderPath))) {
-        SDL_Log("shader prog failed\n");
-        free(m);
-        return NULL;
+    if (gShaders.contains(shaderPath)) {
+        m->_shader = gShaders[shaderPath];
+    } else {
+        if (!(m->_shader = LoadShader(shaderPath))) {
+            // should we default to a default shader upon fail?
+            SDL_Log("shader compilation failed [%s]\n", shaderPath);
+            free(m);
+            return NULL;
+        }
+        gShaders.insert({ (shaderPath), m->_shader });
     }
+
 
     return m;
 }
@@ -235,6 +241,7 @@ struct Animation
     const char *name        = {};
     float       duration    = {};
     float       globalTimer = {};
+    bool        isPlaying {};
 
     uint8_t      jointCount;
     cgltf_node **joints;
@@ -242,6 +249,11 @@ struct Animation
     std::vector<glm::mat4> finalPoseJointMatrices;
     std::vector<glm::mat4> currentPoseJointMatrices;
     std::vector<Transform> currentPoseJointTransforms;
+};
+
+struct MeshData
+{
+    void *ptr;
 };
 
 struct SkinnedModel
@@ -252,8 +264,8 @@ struct SkinnedModel
         std::vector<uint32_t>   _VAOs           = {};
         std::vector<uint64_t>   _indicesCount   = {};
         std::vector<uint64_t>   _indicesOffsets = {};
-        std::string             name;
-        char                   *textureKeyBaseColor = {};
+        std::string             _name;
+        char                   *_textureKeyBaseColor = {};
 
         bool hidden = {};
     };
@@ -261,16 +273,17 @@ struct SkinnedModel
 
     std::vector<skinnedMesh> _meshes = {};
     std::vector<Animation>   _animations;
-    Animation               *currentAnimation = {};
-    Transform                _transform       = {}; // note: we do not load the exported transform
-    void                    *_data            = {}; // opaque handle to cgltf_data
-    uint32_t                 _DataBufferID    = {};
+    Animation               *_currentAnimation    = {};
+    bool                     _shouldPlayAnimation = true;
+    Transform                _transform           = {}; // note: we do not load the exported transform
+    MeshData                 _meshData            = {}; // opaque handle to cgltf_data
+    uint32_t                 _DataBufferID        = {};
     void                     Create(const char *path);
     void                     AnimationUpdate(float dt);
-    void                     Draw();
+    void                     Draw(float dt);
 };
 
-void SkinnedModel::Draw()
+void SkinnedModel::Draw(float dt)
 {
     glm::mat4 model = glm::mat4(1);
 
@@ -297,14 +310,18 @@ void SkinnedModel::Draw()
             ShaderSetUniformVec3ByName("view_pos", &gCameraInUse->_position, material->_shader->programID);
 
             static float phi = 0;
-            phi += 0.001;
-            glm::vec3 lightDir = { cosf(phi), -.5, sinf(phi) };
+            phi += dt*0.1f;
+            glm::vec3 lightDir = { cosf(phi), -.5, sinf(phi)*.1f };
             ShaderSetUniformVec3ByName("light_dir", &lightDir, material->_shader->programID);
 
-            if (_animations.size() > 0 && currentAnimation)
-                ShaderSetMat4ByName("finalPoseJointMatrices", currentAnimation->finalPoseJointMatrices[0], currentAnimation->finalPoseJointMatrices.size(), material->_shader->programID);
-            // bind textures here
 
+            if (_animations.size() > 0 && _currentAnimation)
+                ShaderSetMat4ByName("finalPoseJointMatrices", _currentAnimation->finalPoseJointMatrices[0], _currentAnimation->finalPoseJointMatrices.size(), material->_shader->programID);
+
+            int has_joint_matrices = (_shouldPlayAnimation ? 1 : 0);
+            ShaderSetUniformIntByName("has_joint_matrices", &has_joint_matrices, material->_shader->programID);
+
+            // bind textures here
             glActiveTexture(GL_TEXTURE0);
             glBindTexture(GL_TEXTURE_2D, material->baseColorMap->id);
 
@@ -320,27 +337,32 @@ void SkinnedModel::Draw()
 
 void SkinnedModel::Create(const char *path)
 {
-    // note: this gltf data is an asset, as such there sould only exist one
-    // instance of this in memory. So, instead of giving a path,
-    // make entries into a hash table on first load
-    cgltf_data   *data;
-    cgltf_options options = {};
-    cgltf_result  result  = cgltf_parse_file(&options, path, &data);
+    if (gSharedMeshes.contains(path)) {
+        _meshData.ptr = gSharedMeshes[path];
 
-    if (cgltf_parse_file(&options, path, &data) == cgltf_result_success) {
-        if (cgltf_load_buffers(&options, data, path) == cgltf_result_success) {
-            if ((result = cgltf_validate(data)) != cgltf_result_success) {
-                SDL_Log("cgltf validation error");
-                return;
-            }
-            result = cgltf_load_buffers(&options, data, path);
-        }
     } else {
-        SDL_Log("Failed to load [%s]", path);
-        return;
+        cgltf_data   *data;
+        cgltf_options options = {};
+        cgltf_result  result  = cgltf_parse_file(&options, path, &data);
+
+        if (cgltf_parse_file(&options, path, &data) == cgltf_result_success) {
+            if (cgltf_load_buffers(&options, data, path) == cgltf_result_success) {
+                if ((result = cgltf_validate(data)) != cgltf_result_success) {
+                    SDL_Log("cgltf validation error");
+                    return;
+                }
+                result = cgltf_load_buffers(&options, data, path);
+            }
+        } else {
+            SDL_Log("Failed to load [%s]", path);
+            return;
+        }
+
+        gSharedMeshes.insert({ std::string(path), (void *)data });
+        _meshData.ptr = (void *)data;
     }
 
-    _data = (void *)data;
+    cgltf_data *data = (cgltf_data *)_meshData.ptr;
     GetPathFolder(&assetFolder, path, strlen(path));
 
     // todo: we do take yet take into account the exported model transform of the mesh
@@ -349,7 +371,7 @@ void SkinnedModel::Create(const char *path)
     glBindBuffer(GL_ARRAY_BUFFER, _DataBufferID);
 
 
-    assert(data->buffers_count == 1);
+    // assert(data->buffers_count == 1);
     // note: currently we allocate more data on the GPU than we really need to render this mesh
     // we allocate for the entire .bin which contains more stuff than just primitives & indices
     size_t total_data_size_for_current_submesh = data->buffers->size;
@@ -423,7 +445,7 @@ void SkinnedModel::Create(const char *path)
 
 
             if (!primitive->material) {
-                _meshes[mesh_idx]._materials[submesh_idx] = gMaterials["warrior"];
+                _meshes[mesh_idx]._materials[submesh_idx] = gMaterials["default"];
                 continue;
             };
 
@@ -431,7 +453,7 @@ void SkinnedModel::Create(const char *path)
 
             if (mat->has_pbr_specular_glossiness) {
                 SDL_Log("[%s] has specular_glossiness workflow, which is not supported", data->meshes[mesh_idx].name);
-                continue;
+                _meshes[mesh_idx]._materials[submesh_idx] = gMaterials["default"];
             } else if (mat->has_pbr_metallic_roughness) {
                 // mat->pbr_metallic_roughness.base_color_texture.texcoord;
                 if (mat->pbr_metallic_roughness.base_color_texture.texture) {
@@ -442,23 +464,21 @@ void SkinnedModel::Create(const char *path)
                         // check if a texture by that name already exist in gTextures
                         // if it does, material->texture = gTextures[name];
                         // else load the texture into gTextures then material->texture = gTextures[name];
-
-
                         if (gTextures.contains(std::string(texture->image->uri))) {
                             _meshes[mesh_idx]._materials[submesh_idx] = MaterialCreate("shaders/standard.shader", gTextures[texture->image->uri]);
-                            SDL_Log("loading existing [%s] texture", texture->image->name);
+                            // SDL_Log("loading existing [%s] texture", texture->image->name);
                         } else {
                             // todo: sampler->min/mag and stuff
                             // gTextures.insert({ texture->image->name, TextureCreate((std::string(assetFolder) + std::string(texture->image->uri)).c_str()) });
                             auto t = TextureCreate((std::string(assetFolder) + std::string(texture->image->uri)).c_str());
                             gTextures.insert({ std::string(texture->image->uri), t });
                             _meshes[mesh_idx]._materials[submesh_idx] = MaterialCreate("shaders/standard.shader", t);
-                            SDL_Log("loading new [%s] texture", texture->image->uri);
+                            // SDL_Log("loading new [%s] texture", texture->image->uri);
                         }
                     }
                 } else {
                     // set default material
-                    _meshes[mesh_idx]._materials[submesh_idx] = gMaterials["warrior"];
+                    _meshes[mesh_idx]._materials[submesh_idx] = gMaterials["default"];
                 }
             }
         }
@@ -499,33 +519,38 @@ void SkinnedModel::Create(const char *path)
 
 void SkinnedModel::AnimationUpdate(float dt)
 {
-    if (!currentAnimation) {
+
+    if (!_shouldPlayAnimation) return;
+
+    if (!_currentAnimation) {
         SDL_Log("CurrentAnimation not set");
         return;
     }
-    assert(currentAnimation->duration > 0);
 
-    cgltf_animation *anim = (cgltf_animation *)currentAnimation->handle;
+    assert(_currentAnimation->duration > 0);
+    _currentAnimation->isPlaying = true;
 
-    currentAnimation->globalTimer += dt;
-    float animTime = fmodf(currentAnimation->globalTimer, currentAnimation->duration);
+    cgltf_animation *anim = (cgltf_animation *)_currentAnimation->handle;
+
+    _currentAnimation->globalTimer += dt;
+    float animTime = fmodf(_currentAnimation->globalTimer, _currentAnimation->duration);
 
 
     static int iterationNb = 0;
 
     if (iterationNb++ == 0) {
-        SDL_Log("playing:[%s] | duration: %fsec", anim->name, currentAnimation->duration);
+        SDL_Log("playing:[%s] | duration: %fsec", anim->name, _currentAnimation->duration);
     }
 
     // For each Joint
-    for (size_t joint_idx = 0; joint_idx < currentAnimation->jointCount; joint_idx++) {
+    for (size_t joint_idx = 0; joint_idx < _currentAnimation->jointCount; joint_idx++) {
 
         // For each Channel
         for (size_t chan_idx = 0; chan_idx < anim->channels_count; chan_idx++) {
             cgltf_animation_channel *channel = &anim->channels[chan_idx];
 
             // if channel target matches current joint
-            if (channel->target_node == currentAnimation->joints[joint_idx]) { // && target_path!!!
+            if (channel->target_node == _currentAnimation->joints[joint_idx]) { // && target_path!!!
 
                 int currentKey = -1;
                 int nextKey    = -1;
@@ -548,33 +573,33 @@ void SkinnedModel::AnimationUpdate(float dt)
                 // todo: currentKey => nextKey interpolation
                 // use slerp for quaternions
                 if (channel->target_path == cgltf_animation_path_type_translation) {
-                    currentAnimation->currentPoseJointTransforms[joint_idx].translation = getVec3AtKeyframe(sampler, currentKey);
+                    _currentAnimation->currentPoseJointTransforms[joint_idx].translation = getVec3AtKeyframe(sampler, currentKey);
                 } else if (channel->target_path == cgltf_animation_path_type_rotation) {
-                    auto Q                                                           = getQuatAtKeyframe(sampler, currentKey);
-                    currentAnimation->currentPoseJointTransforms[joint_idx].rotation = glm::eulerAngles(Q);
+                    auto Q                                                            = getQuatAtKeyframe(sampler, currentKey);
+                    _currentAnimation->currentPoseJointTransforms[joint_idx].rotation = glm::eulerAngles(Q);
                 } else if (channel->target_path == cgltf_animation_path_type_scale) {
-                    currentAnimation->currentPoseJointTransforms[joint_idx].scale = 1.f;
+                    _currentAnimation->currentPoseJointTransforms[joint_idx].scale = 1.f;
                 }
 
-                currentAnimation->currentPoseJointTransforms[joint_idx].name = currentAnimation->joints[joint_idx]->name;
+                _currentAnimation->currentPoseJointTransforms[joint_idx].name = _currentAnimation->joints[joint_idx]->name;
 
 
 
                 if (joint_idx == 0) continue;
 
-                if (currentAnimation->joints[joint_idx]->parent == currentAnimation->joints[joint_idx - 1]) {
-                    currentAnimation->currentPoseJointTransforms[joint_idx].parent       = &currentAnimation->currentPoseJointTransforms[joint_idx - 1];
-                    currentAnimation->currentPoseJointTransforms[joint_idx].parent->name = currentAnimation->currentPoseJointTransforms[joint_idx - 1].name;
+                if (_currentAnimation->joints[joint_idx]->parent == _currentAnimation->joints[joint_idx - 1]) {
+                    _currentAnimation->currentPoseJointTransforms[joint_idx].parent       = &_currentAnimation->currentPoseJointTransforms[joint_idx - 1];
+                    _currentAnimation->currentPoseJointTransforms[joint_idx].parent->name = _currentAnimation->currentPoseJointTransforms[joint_idx - 1].name;
 
-                    // currentAnimation->currentPoseJointTransforms[joint_idx - 1].child       = &currentAnimation->currentPoseJointTransforms[joint_idx];
-                    // currentAnimation->currentPoseJointTransforms[joint_idx - 1].child->name = currentAnimation->currentPoseJointTransforms[joint_idx].name;
+                    // _currentAnimation->currentPoseJointTransforms[joint_idx - 1].child       = &_currentAnimation->currentPoseJointTransforms[joint_idx];
+                    // _currentAnimation->currentPoseJointTransforms[joint_idx - 1].child->name = _currentAnimation->currentPoseJointTransforms[joint_idx].name;
                 } else {
                     // find index of parent joint
-                    auto currentJointParent = currentAnimation->joints[joint_idx]->parent;
-                    for (size_t i = 0; i < currentAnimation->jointCount; i++) {
-                        if (currentAnimation->joints[i] == currentJointParent) {
-                            currentAnimation->currentPoseJointTransforms[joint_idx].parent       = &currentAnimation->currentPoseJointTransforms[i];
-                            currentAnimation->currentPoseJointTransforms[joint_idx].parent->name = currentAnimation->currentPoseJointTransforms[i].name;
+                    auto currentJointParent = _currentAnimation->joints[joint_idx]->parent;
+                    for (size_t i = 0; i < _currentAnimation->jointCount; i++) {
+                        if (_currentAnimation->joints[i] == currentJointParent) {
+                            _currentAnimation->currentPoseJointTransforms[joint_idx].parent       = &_currentAnimation->currentPoseJointTransforms[i];
+                            _currentAnimation->currentPoseJointTransforms[joint_idx].parent->name = _currentAnimation->currentPoseJointTransforms[i].name;
                         }
                     }
                 }
@@ -586,12 +611,12 @@ void SkinnedModel::AnimationUpdate(float dt)
 
         // comppute global matrix for current joint
         if (joint_idx == 0) {
-            currentAnimation->currentPoseJointMatrices[0] = currentAnimation->currentPoseJointTransforms[0].GetLocalMatrix();
+            _currentAnimation->currentPoseJointMatrices[0] = _currentAnimation->currentPoseJointTransforms[0].GetLocalMatrix();
         } else {
-            currentAnimation->currentPoseJointMatrices[joint_idx] = currentAnimation->currentPoseJointTransforms[joint_idx].ComputeGlobalMatrix();
+            _currentAnimation->currentPoseJointMatrices[joint_idx] = _currentAnimation->currentPoseJointTransforms[joint_idx].ComputeGlobalMatrix();
         }
-        glm::mat4 *invBindMatrices                          = ((glm::mat4 *)((uint8_t *)((cgltf_data *)_data)->skins->inverse_bind_matrices->buffer_view->buffer->data + ((cgltf_data *)_data)->skins->inverse_bind_matrices->buffer_view->offset));
-        currentAnimation->finalPoseJointMatrices[joint_idx] = currentAnimation->currentPoseJointMatrices[joint_idx] * invBindMatrices[joint_idx];
+        glm::mat4 *invBindMatrices                           = ((glm::mat4 *)((uint8_t *)((cgltf_data *)_meshData.ptr)->skins->inverse_bind_matrices->buffer_view->buffer->data + ((cgltf_data *)_meshData.ptr)->skins->inverse_bind_matrices->buffer_view->offset));
+        _currentAnimation->finalPoseJointMatrices[joint_idx] = _currentAnimation->currentPoseJointMatrices[joint_idx] * invBindMatrices[joint_idx];
         // finalPoseJointMatrices[joint_idx]   = currentPoseJointMatrices[joint_idx] * glm::inverse(bindPoseLocalJointTransforms[joint_idx].ComputeGlobalMatrix());
     } // End of Joints loop
 }
