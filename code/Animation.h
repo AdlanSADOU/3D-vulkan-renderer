@@ -1,45 +1,5 @@
 #pragma once
 
-/**
- * updateCurrentAnimation(double globalTime)
- *      updateBone(size_t index, double time, glm::mat4 parentMatrix)
- *          calcScale(const double& time, const usls::scene::animation::Channel& channel)
- *          calcRotation(const double& time, const usls::scene::animation::Channel& channel)
- *          calcTranslation(const double& time, const usls::scene::animation::Channel& channel)
- *
- */
-
-
-// note: unused
-struct Joint
-{
-    char     *name;
-    int8_t    parent;
-    glm::mat4 invBindPose;
-};
-
-struct Skeleton
-{
-    uint32_t           id;
-    uint32_t           jointCount;
-    std::vector<Joint> joints;
-};
-
-struct AnimatedJoint
-{
-    uint32_t               xFormsCount;
-    std::vector<Transform> xFormsPerFrame;
-};
-
-struct AnimationClip
-{
-    uint32_t                   id;
-    float                      duration;
-    std::vector<AnimatedJoint> joints;
-};
-//////////////////////////////////////////////////////
-
-
 //
 // Sonme utility functions
 //
@@ -58,6 +18,20 @@ static float AnimationGetClipDuration(cgltf_animation *animationClip)
         duration = lastMax;
     }
     return duration;
+}
+
+static int AnimationMaxSampleCount(cgltf_animation *animationClip)
+{
+    float last_max = 0;
+
+    for (size_t i = 0; i < animationClip->samplers_count; i++) {
+        auto *input = animationClip->samplers[i].input;
+
+        if (input->count > last_max) {
+            last_max = input->count;
+        }
+    }
+    return last_max;
 }
 
 static float readFloatFromAccessor(cgltf_accessor *accessor, cgltf_size idx)
@@ -99,7 +73,7 @@ static void            ComputeLocalJointTransforms(cgltf_data *data)
         bindPoseLocalJointTransforms[joint_idx].translation = *(glm::vec3 *)joints[joint_idx]->translation;
         glm::vec3 R                                         = glm::eulerAngles(*(glm::quat *)joints[joint_idx]->rotation);
         bindPoseLocalJointTransforms[joint_idx].rotation    = R;
-        bindPoseLocalJointTransforms[joint_idx].scale       = 1.f;
+        bindPoseLocalJointTransforms[joint_idx].scale       = glm::vec3(1);
 
         bindPoseLocalJointTransforms[joint_idx].name = joints[joint_idx]->name;
 

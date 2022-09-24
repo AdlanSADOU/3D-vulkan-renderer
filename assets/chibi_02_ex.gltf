@@ -2105,9 +2105,30 @@
                         "node" : 46,
                         "path" : "scale"
                     }
+                },
+                {
+                    "sampler" : 150,
+                    "target" : {
+                        "node" : 50,
+                        "path" : "translation"
+                    }
+                },
+                {
+                    "sampler" : 151,
+                    "target" : {
+                        "node" : 50,
+                        "path" : "rotation"
+                    }
+                },
+                {
+                    "sampler" : 152,
+                    "target" : {
+                        "node" : 50,
+                        "path" : "scale"
+                    }
                 }
             ],
-            "name" : "idle",
+            "name" : "Animation",
             "samplers" : [
                 {
                     "input" : 7,
@@ -2858,35 +2879,7 @@
                     "input" : 7,
                     "interpolation" : "LINEAR",
                     "output" : 157
-                }
-            ]
-        },
-        {
-            "channels" : [
-                {
-                    "sampler" : 0,
-                    "target" : {
-                        "node" : 50,
-                        "path" : "translation"
-                    }
                 },
-                {
-                    "sampler" : 1,
-                    "target" : {
-                        "node" : 50,
-                        "path" : "rotation"
-                    }
-                },
-                {
-                    "sampler" : 2,
-                    "target" : {
-                        "node" : 50,
-                        "path" : "scale"
-                    }
-                }
-            ],
-            "name" : "idle",
-            "samplers" : [
                 {
                     "input" : 7,
                     "interpolation" : "LINEAR",

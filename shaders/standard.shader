@@ -18,7 +18,7 @@ uniform mat4 projection;
 uniform mat4 view;
 uniform mat4 model;
 
-uniform mat4 finalPoseJointMatrices[128];// might want to switch to SSBOs
+uniform mat4 joint_matrices[128];// might want to switch to SSBOs
 uniform int has_joint_matrices;
 
 
@@ -31,10 +31,10 @@ void main()
     if (has_joint_matrices == 1)
     {
         skinMatrix =
-        WEIGHTS_0.x * finalPoseJointMatrices[uint(JOINTS_0.x)]+
-        WEIGHTS_0.y * finalPoseJointMatrices[uint(JOINTS_0.y)]+
-        WEIGHTS_0.z * finalPoseJointMatrices[uint(JOINTS_0.z)];
-        (1-WEIGHTS_0.x-WEIGHTS_0.y-WEIGHTS_0.z) * finalPoseJointMatrices[uint(JOINTS_0.w)];
+        WEIGHTS_0.x * joint_matrices[uint(JOINTS_0.x)]+
+        WEIGHTS_0.y * joint_matrices[uint(JOINTS_0.y)]+
+        WEIGHTS_0.z * joint_matrices[uint(JOINTS_0.z)];
+        (1-WEIGHTS_0.x-WEIGHTS_0.y-WEIGHTS_0.z) * joint_matrices[uint(JOINTS_0.w)];
     }
 
     gl_Position = modelViewProj * skinMatrix * vec4(POSITION, 1.0f);

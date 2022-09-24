@@ -28,7 +28,7 @@
             "name" : "Bone.001",
             "translation" : [
                 0,
-                2,
+                1.0379037857055664,
                 0
             ]
         },
@@ -36,7 +36,12 @@
             "children" : [
                 1
             ],
-            "name" : "Bone"
+            "name" : "Bone",
+            "translation" : [
+                0,
+                0.9620962142944336,
+                0
+            ]
         },
         {
             "mesh" : 0,
@@ -288,9 +293,9 @@
         {
             "bufferView" : 7,
             "componentType" : 5126,
-            "count" : 21,
+            "count" : 92,
             "max" : [
-                0.35
+                1.5333333333333334
             ],
             "min" : [
                 0.016666666666666666
@@ -300,73 +305,73 @@
         {
             "bufferView" : 8,
             "componentType" : 5126,
-            "count" : 21,
+            "count" : 92,
             "type" : "VEC3"
         },
         {
             "bufferView" : 9,
             "componentType" : 5126,
-            "count" : 21,
+            "count" : 92,
             "type" : "VEC4"
         },
         {
             "bufferView" : 10,
             "componentType" : 5126,
-            "count" : 21,
+            "count" : 92,
             "type" : "VEC3"
         },
         {
             "bufferView" : 11,
             "componentType" : 5126,
-            "count" : 21,
+            "count" : 92,
             "type" : "VEC3"
         },
         {
             "bufferView" : 12,
             "componentType" : 5126,
-            "count" : 21,
+            "count" : 92,
             "type" : "VEC4"
         },
         {
             "bufferView" : 13,
             "componentType" : 5126,
-            "count" : 21,
+            "count" : 92,
             "type" : "VEC3"
         },
         {
             "bufferView" : 14,
             "componentType" : 5126,
-            "count" : 21,
+            "count" : 92,
             "type" : "VEC3"
         },
         {
             "bufferView" : 15,
             "componentType" : 5126,
-            "count" : 21,
+            "count" : 92,
             "type" : "VEC4"
         },
         {
             "bufferView" : 16,
             "componentType" : 5126,
-            "count" : 21,
+            "count" : 92,
             "type" : "VEC3"
         },
         {
             "bufferView" : 17,
             "componentType" : 5126,
-            "count" : 21,
+            "count" : 92,
             "type" : "VEC3"
         },
         {
             "bufferView" : 18,
             "componentType" : 5126,
-            "count" : 21,
+            "count" : 92,
             "type" : "VEC4"
         },
         {
             "bufferView" : 19,
             "componentType" : 5126,
-            "count" : 21,
+            "count" : 92,
             "type" : "VEC3"
         }
     ],
@@ -408,73 +413,73 @@
         },
         {
             "buffer" : 0,
-            "byteLength" : 84,
+            "byteLength" : 368,
             "byteOffset" : 2440
         },
         {
             "buffer" : 0,
-            "byteLength" : 252,
-            "byteOffset" : 2524
+            "byteLength" : 1104,
+            "byteOffset" : 2808
         },
         {
             "buffer" : 0,
-            "byteLength" : 336,
-            "byteOffset" : 2776
+            "byteLength" : 1472,
+            "byteOffset" : 3912
         },
         {
             "buffer" : 0,
-            "byteLength" : 252,
-            "byteOffset" : 3112
+            "byteLength" : 1104,
+            "byteOffset" : 5384
         },
         {
             "buffer" : 0,
-            "byteLength" : 252,
-            "byteOffset" : 3364
+            "byteLength" : 1104,
+            "byteOffset" : 6488
         },
         {
             "buffer" : 0,
-            "byteLength" : 336,
-            "byteOffset" : 3616
+            "byteLength" : 1472,
+            "byteOffset" : 7592
         },
         {
             "buffer" : 0,
-            "byteLength" : 252,
-            "byteOffset" : 3952
+            "byteLength" : 1104,
+            "byteOffset" : 9064
         },
         {
             "buffer" : 0,
-            "byteLength" : 252,
-            "byteOffset" : 4204
+            "byteLength" : 1104,
+            "byteOffset" : 10168
         },
         {
             "buffer" : 0,
-            "byteLength" : 336,
-            "byteOffset" : 4456
+            "byteLength" : 1472,
+            "byteOffset" : 11272
         },
         {
             "buffer" : 0,
-            "byteLength" : 252,
-            "byteOffset" : 4792
+            "byteLength" : 1104,
+            "byteOffset" : 12744
         },
         {
             "buffer" : 0,
-            "byteLength" : 252,
-            "byteOffset" : 5044
+            "byteLength" : 1104,
+            "byteOffset" : 13848
         },
         {
             "buffer" : 0,
-            "byteLength" : 336,
-            "byteOffset" : 5296
+            "byteLength" : 1472,
+            "byteOffset" : 14952
         },
         {
             "buffer" : 0,
-            "byteLength" : 252,
-            "byteOffset" : 5632
+            "byteLength" : 1104,
+            "byteOffset" : 16424
         }
     ],
     "buffers" : [
         {
-            "byteLength" : 5884,
+            "byteLength" : 17528,
             "uri" : "animated_block.bin"
         }
     ]

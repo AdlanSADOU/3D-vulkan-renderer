@@ -1,67 +1,10 @@
 #pragma once
 
-struct Vertex
-{
-    glm::vec3 position;
-    glm::vec3 normal;
-    glm::vec2 texCoord;
-    glm::vec4 joints;
-    glm::vec4 weights;
-};
-
-static float triangle_verts[] = {
-    -0.5f, -0.5f, -0.5f,
-    0.5f, -0.5f, -0.5f,
-    0.0f, 0.5f, -0.5f
-};
-
-static uint16_t triangle_indices[] = {
-    0, 1, 2
-};
-
-static std::vector<Vertex> cube_verts = {
-    // front
-    { { -1.0, -1.0, 1.0 }, { 1.0, 1.0, 1.0 }, { 0.0, 0.0 } },
-    { { 1.0, -1.0, 1.0 }, { 1.0, 1.0, 1.0 }, { 1.0, 0.0 } },
-    { { 1.0, 1.0, 1.0 }, { 1.0, 1.0, 1.0 }, { 1.0, 1.0 } },
-    { { -1.0, 1.0, 1.0 }, { 1.0, 1.0, 1.0 }, { 0.0, 1.0 } },
-    // back
-    { { -1.0, -1.0, -1.0 }, { 1.0, 1.0, 1.0 }, { 0.0, 0.0 } },
-    { { 1.0, -1.0, -1.0 }, { 1.0, 1.0, 1.0 }, { 1.0, 0.0 } },
-    { { 1.0, 1.0, -1.0 }, { 1.0, 1.0, 1.0 }, { 1.0, 1.0 } },
-    { { -1.0, 1.0, -1.0 }, { 1.0, 1.0, 1.0 }, { 0.0, 1.0 } }
-};
-
-static std::vector<uint16_t> cube_indices = {
-    // front
-    0, 1, 2,
-    2, 3, 0,
-    // right
-    1, 5, 6,
-    6, 2, 1,
-    // back
-    7, 6, 5,
-    5, 4, 7,
-    // left
-    4, 0, 3,
-    3, 7, 4,
-    // bottom
-    4, 5, 1,
-    1, 0, 4,
-    // top
-    3, 2, 6,
-    6, 7, 3
-};
-
-
-
-
-
 struct Material
 {
     char    *name {};
     Shader  *_shader {};
-    Texture *baseColorMap {};
+    Texture *base_color_map {};
 };
 
 static Material *MaterialCreate(const char *shaderPath, Texture *texture)
@@ -69,7 +12,7 @@ static Material *MaterialCreate(const char *shaderPath, Texture *texture)
     Material *m = (Material *)malloc(sizeof(Material));
     assert(m);
 
-    m->baseColorMap = texture;
+    m->base_color_map = texture;
 
     if (gShaders.contains(shaderPath)) {
         m->_shader = gShaders[shaderPath];
@@ -81,159 +24,53 @@ static Material *MaterialCreate(const char *shaderPath, Texture *texture)
             return NULL;
         }
         gShaders.insert({ (shaderPath), m->_shader });
+        SDL_Log("[%d] loading [%s]", gShaders.size(), shaderPath);
     }
 
 
     return m;
 }
 
-
-
-
-
-//---------------------------------------
-// Interleaved Meshes implementation
-//---------------------------------------
-
-struct Mesh
+struct TranslationChannel
 {
-    std::vector<std::vector<Vertex>>   _submeshVertices;
-    std::vector<std::vector<uint16_t>> _submeshIndices;
-    std::vector<std::vector<Texture>>  _subTextures;
-
-
-
-    std::vector<uint32_t> _VAOs;
-    std::vector<uint32_t> _VBOs;
-    std::vector<uint32_t> _IBOs;
-
-    int32_t _submeshCount;
-
-    std::vector<Material *> _submeshMaterials;
-
-    void Create();
+    float     *timestamps;
+    glm::vec3 *translations;
+};
+struct RotationChannel
+{
+    float     *timestamps;
+    glm::quat *rotations;
+};
+struct ScaleChannel
+{
+    float     *timestamps;
+    glm::vec3 *scales;
 };
 
-void Mesh::Create()
+struct Sample
 {
-    _VAOs.resize(_submeshCount);
-    _VBOs.resize(_submeshCount);
-    _IBOs.resize(_submeshCount);
+    uint8_t            target_joint;
+    TranslationChannel translation_channel;
+    RotationChannel    rotation_channel;
+    ScaleChannel       scale_channel;
+};
 
-    for (size_t i = 0; i < _submeshVertices.size(); i++) {
-
-        glGenVertexArrays(1, &_VAOs[i]);
-        glBindVertexArray(_VAOs[i]);
-
-        glGenBuffers(1, &_VBOs[i]);
-        glBindBuffer(GL_ARRAY_BUFFER, _VBOs[i]);
-        glBufferData(GL_ARRAY_BUFFER, _submeshVertices[i].size() * sizeof(Vertex) /*bytes*/, _submeshVertices[i].data(), GL_DYNAMIC_DRAW);
-
-        glGenBuffers(1, &_IBOs[i]);
-        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, _IBOs[i]);
-        glBufferData(GL_ELEMENT_ARRAY_BUFFER, _submeshIndices[i].size() * sizeof(uint16_t) /*bytes*/, _submeshIndices[i].data(), GL_DYNAMIC_DRAW);
-
-        glEnableVertexAttribArray(0);
-        glVertexAttribPointer(
-            0 /*layout location*/,
-            3 /*number of components*/,
-            GL_FLOAT /*type of components*/,
-            GL_FALSE,
-            sizeof(Vertex),
-            (void *)offsetof(Vertex, Vertex::position));
-
-        glEnableVertexAttribArray(1);
-        glVertexAttribPointer(
-            1 /*layout location*/,
-            3 /*number of components*/,
-            GL_FLOAT /*type of components*/,
-            GL_FALSE,
-            sizeof(Vertex),
-            (void *)offsetof(Vertex, Vertex::normal));
-
-        glEnableVertexAttribArray(2);
-        glVertexAttribPointer(
-            2 /*layout location*/,
-            2 /*number of components*/,
-            GL_FLOAT /*type of components*/,
-            GL_FALSE,
-            sizeof(Vertex),
-            (void *)offsetof(Vertex, Vertex::texCoord));
-
-        glBindVertexArray(0);
-        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-        glBindBuffer(GL_ARRAY_BUFFER, 0);
-    }
-}
-
-
-struct Model
+struct Joint
 {
-    std::vector<Mesh> _meshes;
-    glm::mat4         _transform;
-    int32_t           _meshCount;
+    char     *name;
+    int8_t    parent; // 128 max joints!!
+    glm::mat4 inv_bind_matrix;
+    glm::mat4 global_joint_matrix;
+};
 
-    void Create(const char *path)
-    {
-
-        cgltf_options options = {};
-        cgltf_data   *data    = NULL;
-        cgltf_result  result  = cgltf_parse_file(&options, path, &data);
-
-        if (result == cgltf_result_success) {
-            result = cgltf_load_buffers(&options, data, path);
-
-            if (data->meshes_count == 0) {
-                // todo: make this format into a LOG_ERROR() macro
-                SDL_Log("%s:%d: no meshes found...", __FILE__, __LINE__);
-            }
-        }
-
-        _meshes.resize(data->meshes_count);
-        _meshCount = (int32_t)data->meshes_count;
-
-        for (size_t i = 0; i < data->meshes_count; i++) {
-            uint32_t submeshCount = data->meshes[i].primitives_count;
-
-            _meshes[i]._submeshVertices.resize(submeshCount);
-            _meshes[i]._submeshIndices.resize(submeshCount);
-            _meshes[i]._submeshCount = submeshCount;
-            _meshes[i]._submeshMaterials.resize(submeshCount);
-
-            for (size_t j = 0; j < submeshCount; j++) {
-                {
-                    // todo: need to check for which primitives are available
-                    cgltf_buffer_view *positions = data->meshes[i].primitives[j].attributes[0].data->buffer_view;
-                    cgltf_buffer_view *normals   = data->meshes[i].primitives[j].attributes[1].data->buffer_view;
-                    cgltf_buffer_view *texCoords = data->meshes[i].primitives[j].attributes[2].data->buffer_view;
-
-                    for (size_t a = 0; a < data->meshes[i].primitives[j].attributes[i].data->count; a++) {
-                        Vertex vert;
-                        vert.position = ((glm::vec3 *)(((char *)positions->buffer->data) + positions->offset))[a];
-                        vert.normal   = ((glm::vec3 *)(((char *)normals->buffer->data) + normals->offset))[a];
-                        vert.texCoord = ((glm::vec2 *)(((char *)texCoords->buffer->data) + texCoords->offset))[a];
-                        _meshes[i]._submeshVertices[j].push_back(vert);
-                    }
-                }
-
-                cgltf_buffer_view *indices_view = data->meshes[i].primitives[j].indices->buffer_view;
-                for (size_t b = 0; b < data->meshes[i].primitives[j].indices->count; b++) {
-                    _meshes[i]._submeshIndices[j].push_back(((uint16_t *)((char *)indices_view->buffer->data + indices_view->offset))[b]);
-                }
-            }
-
-            _meshes[i].Create();
-        }
-    }
+struct AnimationV2
+{
+    float               duration;
+    std::vector<Sample> samples;
 };
 
 
-
-//---------------------------------------
-// Non-interleaved Mesh implementation
-//---------------------------------------
-
-
+AnimationV2 animation;
 
 struct Animation
 {
@@ -243,12 +80,9 @@ struct Animation
     float       globalTimer = {};
     bool        isPlaying {};
 
-    uint8_t      jointCount;
-    cgltf_node **joints;
+    std::vector<Joint> _joints;
 
-    std::vector<glm::mat4> finalPoseJointMatrices;
-    std::vector<glm::mat4> currentPoseJointMatrices;
-    std::vector<Transform> currentPoseJointTransforms;
+    std::vector<glm::mat4> joint_matrices;
 };
 
 struct MeshData
@@ -258,14 +92,19 @@ struct MeshData
 
 struct SkinnedModel
 {
+
+    ///////////////
+    std::vector<Joint>       _joints;
+    std::vector<AnimationV2> _animations_v2;
+
+    ///////////////
     struct skinnedMesh
     {
-        std::vector<Material *> _materials      = {}; // todo: store an index instead of a ptr
-        std::vector<uint32_t>   _VAOs           = {};
-        std::vector<uint64_t>   _indicesCount   = {};
-        std::vector<uint64_t>   _indicesOffsets = {};
+        std::vector<Material *> _materials     = {}; // todo: store an index instead of a ptr
+        std::vector<uint32_t>   _VAOs          = {};
+        std::vector<uint64_t>   _indices_count = {};
+        std::vector<uint64_t>   _index_offsets = {};
         std::string             _name;
-        char                   *_textureKeyBaseColor = {};
 
         bool hidden = {};
     };
@@ -273,14 +112,16 @@ struct SkinnedModel
 
     std::vector<skinnedMesh> _meshes = {};
     std::vector<Animation>   _animations;
-    Animation               *_currentAnimation    = {};
-    bool                     _shouldPlayAnimation = true;
-    Transform                _transform           = {}; // note: we do not load the exported transform
-    MeshData                 _meshData            = {}; // opaque handle to cgltf_data
-    uint32_t                 _DataBufferID        = {};
+    Animation               *_current_animation     = {};
+    bool                     _should_play_animation = true;
+    Transform                _transform             = {}; // note: we do not load the exported transform
+    MeshData                 _mesh_data             = {}; // opaque handle to cgltf_data
+    uint32_t                 _data_buffer_id        = {};
     void                     Create(const char *path);
     void                     AnimationUpdate(float dt);
     void                     Draw(float dt);
+
+    float phi = 0; // debug
 };
 
 void SkinnedModel::Draw(float dt)
@@ -294,7 +135,7 @@ void SkinnedModel::Draw(float dt)
         * glm::scale(model, glm::vec3(_transform.scale));
 
 
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, _DataBufferID);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, _data_buffer_id);
 
     for (size_t mesh_idx = 0; mesh_idx < this->_meshes.size(); mesh_idx++) {
 
@@ -309,24 +150,23 @@ void SkinnedModel::Draw(float dt)
             ShaderSetMat4ByName("model", model, material->_shader->programID);
             ShaderSetUniformVec3ByName("view_pos", &gCameraInUse->_position, material->_shader->programID);
 
-            static float phi = 0;
-            phi += dt*0.1f;
-            glm::vec3 lightDir = { cosf(phi), -.5, sinf(phi)*.1f };
+            phi += dt * 0.1f;
+            glm::vec3 lightDir = { cosf(phi), -.5, sinf(phi) * .1f };
             ShaderSetUniformVec3ByName("light_dir", &lightDir, material->_shader->programID);
 
 
-            if (_animations.size() > 0 && _currentAnimation)
-                ShaderSetMat4ByName("finalPoseJointMatrices", _currentAnimation->finalPoseJointMatrices[0], _currentAnimation->finalPoseJointMatrices.size(), material->_shader->programID);
+            if (_animations.size() > 0 && _current_animation)
+                ShaderSetMat4ByName("joint_matrices", _current_animation->joint_matrices[0], _current_animation->joint_matrices.size(), material->_shader->programID);
 
-            int has_joint_matrices = (_shouldPlayAnimation ? 1 : 0);
+            int has_joint_matrices = (_should_play_animation ? 1 : 0);
             ShaderSetUniformIntByName("has_joint_matrices", &has_joint_matrices, material->_shader->programID);
 
             // bind textures here
             glActiveTexture(GL_TEXTURE0);
-            glBindTexture(GL_TEXTURE_2D, material->baseColorMap->id);
+            glBindTexture(GL_TEXTURE_2D, material->base_color_map->id);
 
             glBindVertexArray(_meshes[mesh_idx]._VAOs[submesh_idx]);
-            glDrawElements(GL_TRIANGLES, _meshes[mesh_idx]._indicesCount[submesh_idx], GL_UNSIGNED_SHORT, (void *)_meshes[mesh_idx]._indicesOffsets[submesh_idx]);
+            glDrawElements(GL_TRIANGLES, _meshes[mesh_idx]._indices_count[submesh_idx], GL_UNSIGNED_SHORT, (void *)_meshes[mesh_idx]._index_offsets[submesh_idx]);
             glBindVertexArray(0);
         }
     }
@@ -338,7 +178,7 @@ void SkinnedModel::Draw(float dt)
 void SkinnedModel::Create(const char *path)
 {
     if (gSharedMeshes.contains(path)) {
-        _meshData.ptr = gSharedMeshes[path];
+        _mesh_data.ptr = gSharedMeshes[path];
 
     } else {
         cgltf_data   *data;
@@ -359,16 +199,16 @@ void SkinnedModel::Create(const char *path)
         }
 
         gSharedMeshes.insert({ std::string(path), (void *)data });
-        _meshData.ptr = (void *)data;
+        _mesh_data.ptr = (void *)data;
     }
 
-    cgltf_data *data = (cgltf_data *)_meshData.ptr;
+    cgltf_data *data = (cgltf_data *)_mesh_data.ptr;
     GetPathFolder(&assetFolder, path, strlen(path));
 
     // todo: we do take yet take into account the exported model transform of the mesh
 
-    glGenBuffers(1, &_DataBufferID);
-    glBindBuffer(GL_ARRAY_BUFFER, _DataBufferID);
+    glGenBuffers(1, &_data_buffer_id);
+    glBindBuffer(GL_ARRAY_BUFFER, _data_buffer_id);
 
 
     // assert(data->buffers_count == 1);
@@ -385,8 +225,8 @@ void SkinnedModel::Create(const char *path)
 
         size_t submeshCount = data->meshes[mesh_idx].primitives_count;
         _meshes[mesh_idx]._VAOs.resize(submeshCount);
-        _meshes[mesh_idx]._indicesCount.resize(submeshCount);
-        _meshes[mesh_idx]._indicesOffsets.resize(submeshCount);
+        _meshes[mesh_idx]._indices_count.resize(submeshCount);
+        _meshes[mesh_idx]._index_offsets.resize(submeshCount);
         _meshes[mesh_idx]._materials.resize(submeshCount);
 
         glGenVertexArrays(submeshCount, &_meshes[mesh_idx]._VAOs[0]);
@@ -395,7 +235,7 @@ void SkinnedModel::Create(const char *path)
             cgltf_primitive *primitive = primitives + submesh_idx;
 
             glBindVertexArray(_meshes[mesh_idx]._VAOs[submesh_idx]);
-            glBindBuffer(GL_ARRAY_BUFFER, _DataBufferID);
+            glBindBuffer(GL_ARRAY_BUFFER, _data_buffer_id);
 
             // we only ever loop once through the primitives
             for (size_t attrib_idx = 0; attrib_idx < primitives->attributes_count; attrib_idx++) {
@@ -429,14 +269,14 @@ void SkinnedModel::Create(const char *path)
 
 
             totalSize += primitive->indices->buffer_view->size;
-            glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, _DataBufferID);
+            glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, _data_buffer_id);
             glBufferSubData(GL_ELEMENT_ARRAY_BUFFER,
                 primitive->indices->buffer_view->offset,
                 primitive->indices->buffer_view->size,
                 ((uint8_t *)primitive->indices->buffer_view->buffer->data + primitive->indices->buffer_view->offset));
 
-            _meshes[mesh_idx]._indicesOffsets[submesh_idx] = primitive->indices->buffer_view->offset;
-            _meshes[mesh_idx]._indicesCount[submesh_idx]   = primitive->indices->count;
+            _meshes[mesh_idx]._index_offsets[submesh_idx] = primitive->indices->buffer_view->offset;
+            _meshes[mesh_idx]._indices_count[submesh_idx] = primitive->indices->count;
 
 
             // Retrieve Texture info
@@ -466,14 +306,12 @@ void SkinnedModel::Create(const char *path)
                         // else load the texture into gTextures then material->texture = gTextures[name];
                         if (gTextures.contains(std::string(texture->image->uri))) {
                             _meshes[mesh_idx]._materials[submesh_idx] = MaterialCreate("shaders/standard.shader", gTextures[texture->image->uri]);
-                            // SDL_Log("loading existing [%s] texture", texture->image->name);
                         } else {
                             // todo: sampler->min/mag and stuff
                             // gTextures.insert({ texture->image->name, TextureCreate((std::string(assetFolder) + std::string(texture->image->uri)).c_str()) });
                             auto t = TextureCreate((std::string(assetFolder) + std::string(texture->image->uri)).c_str());
                             gTextures.insert({ std::string(texture->image->uri), t });
                             _meshes[mesh_idx]._materials[submesh_idx] = MaterialCreate("shaders/standard.shader", t);
-                            // SDL_Log("loading new [%s] texture", texture->image->uri);
                         }
                     }
                 } else {
@@ -500,16 +338,103 @@ void SkinnedModel::Create(const char *path)
             .name     = data->animations[animation_idx].name,
             .duration = AnimationGetClipDuration(&data->animations[animation_idx]),
         };
+        // fixme: delete
+        anim->joint_matrices.resize(data->skins->joints_count);
 
-        anim->jointCount = data->skins->joints_count;
-        anim->joints     = data->skins->joints;
-        anim->finalPoseJointMatrices.resize(anim->jointCount);
-        anim->currentPoseJointMatrices.resize(anim->jointCount);
-        anim->currentPoseJointTransforms.resize(anim->jointCount);
-
-        for (size_t i = 0; i < anim->finalPoseJointMatrices.size(); i++) {
-            anim->finalPoseJointMatrices[i] = glm::mat4(1);
+        for (size_t i = 0; i < anim->joint_matrices.size(); i++) {
+            anim->joint_matrices[i] = glm::mat4(1);
         }
+    }
+
+
+
+
+    ////// Setup Skeleton: flatten **joints array
+    assert(data->skins_count == 1);
+
+    auto skin     = data->skins;
+    auto joints   = skin->joints;
+    auto rig_node = skin->joints[0]->parent;
+    _joints.resize(skin->joints_count);
+
+    for (size_t joint_idx = 0; joint_idx < skin->joints_count; joint_idx++) {
+        _joints[joint_idx].name = joints[joint_idx]->name; // fixme: animation.joints[i].name will crash if cgltf_data is freed;
+
+        // set inv_bind_matrix
+        uint8_t   *data_buffer       = (uint8_t *)skin->inverse_bind_matrices->buffer_view->buffer->data;
+        auto       offset            = skin->inverse_bind_matrices->buffer_view->offset;
+        glm::mat4 *inv_bind_matrices = ((glm::mat4 *)(data_buffer + offset));
+
+        _joints[joint_idx].inv_bind_matrix = inv_bind_matrices[joint_idx];
+
+        auto current_joint_parent = joints[joint_idx]->parent;
+
+        if (joint_idx == 0 || current_joint_parent == rig_node)
+            _joints[joint_idx].parent = -1;
+        else {
+
+            for (size_t i = 1; i < skin->joints_count; i++) {
+                if (joints[i]->parent == current_joint_parent) {
+                    _joints[joint_idx].parent = i - 1;
+                    break;
+                }
+            }
+        }
+    }
+
+    for (size_t i = 0; i < _animations.size(); i++) {
+        _animations[i]._joints = _joints;
+    }
+
+
+
+
+
+    ////////// todo: figure out if we should actually go this route
+    ////// Process animation samples
+    auto anims_data = data->animations;
+
+    _animations_v2.resize(data->animations_count);
+    for (size_t anim_idx = 0; anim_idx < data->animations_count; anim_idx++) {
+        int sample_count = AnimationMaxSampleCount(anims_data);
+        _animations_v2[anim_idx].samples.resize(skin->joints_count);
+
+        // For each Joint
+        for (size_t joint_idx = 0; joint_idx < skin->joints_count; joint_idx++) {
+
+            // For each Channel
+            for (size_t chan_idx = 0; chan_idx < anims_data->channels_count; chan_idx++) {
+                cgltf_animation_channel *channel = &anims_data->channels[chan_idx];
+
+                // if channel target matches current joint
+                if (channel->target_node == skin->joints[joint_idx]) {
+
+                    cgltf_animation_sampler *sampler = channel->sampler;
+
+                    _animations_v2[anim_idx].samples[joint_idx].target_joint = joint_idx;
+
+                    auto   input_data_ptr    = (uint8_t *)sampler->input->buffer_view->buffer->data;
+                    auto   input_data_offset = sampler->input->buffer_view->offset;
+                    float *timestamps_data   = (float *)(input_data_ptr + input_data_offset);
+
+                    auto   output_data_ptr     = (uint8_t *)sampler->output->buffer_view->buffer->data;
+                    auto   output_data_offset  = sampler->output->buffer_view->offset;
+                    float *transformation_data = (float *)(output_data_ptr + output_data_offset);
+
+                    if (channel->target_path == cgltf_animation_path_type_translation) {
+                        _animations_v2[anim_idx].samples[joint_idx].translation_channel.timestamps   = timestamps_data;
+                        _animations_v2[anim_idx].samples[joint_idx].translation_channel.translations = (glm::vec3 *)transformation_data;
+
+                    } else if (channel->target_path == cgltf_animation_path_type_rotation) {
+                        _animations_v2[anim_idx].samples[joint_idx].rotation_channel.timestamps = timestamps_data;
+                        _animations_v2[anim_idx].samples[joint_idx].rotation_channel.rotations  = (glm::quat *)transformation_data;
+                    } else if (channel->target_path == cgltf_animation_path_type_scale) {
+                        _animations_v2[anim_idx].samples[joint_idx].scale_channel.timestamps = timestamps_data;
+                        _animations_v2[anim_idx].samples[joint_idx].scale_channel.scales     = (glm::vec3 *)transformation_data; // fixme: we might want to scope this to uniform scale only
+                    }
+                }
+            } // End of channels loop for the current joint
+        } // End of Joints loop
     }
 }
 
@@ -520,103 +445,76 @@ void SkinnedModel::Create(const char *path)
 void SkinnedModel::AnimationUpdate(float dt)
 {
 
-    if (!_shouldPlayAnimation) return;
+    if (!_should_play_animation) return;
 
-    if (!_currentAnimation) {
+    if (!_current_animation) {
         SDL_Log("CurrentAnimation not set");
         return;
     }
 
-    assert(_currentAnimation->duration > 0);
-    _currentAnimation->isPlaying = true;
+    auto anim = _current_animation;
 
-    cgltf_animation *anim = (cgltf_animation *)_currentAnimation->handle;
+    assert(anim->duration > 0);
+    anim->isPlaying = true;
 
-    _currentAnimation->globalTimer += dt;
-    float animTime = fmodf(_currentAnimation->globalTimer, _currentAnimation->duration);
+    anim->globalTimer += dt;
+    float animTime = fmodf(anim->globalTimer, anim->duration);
 
 
     static int iterationNb = 0;
 
     if (iterationNb++ == 0) {
-        SDL_Log("playing:[%s] | duration: %fsec", anim->name, _currentAnimation->duration);
+        SDL_Log("playing:[%s] | duration: %fsec", ((cgltf_animation *)anim->handle)->name, anim->duration);
     }
 
     // For each Joint
-    for (size_t joint_idx = 0; joint_idx < _currentAnimation->jointCount; joint_idx++) {
+    int channel_idx = 0;
+    for (size_t joint_idx = 0; joint_idx < anim->_joints.size(); joint_idx++) {
 
-        // For each Channel
-        for (size_t chan_idx = 0; chan_idx < anim->channels_count; chan_idx++) {
-            cgltf_animation_channel *channel = &anim->channels[chan_idx];
+        auto channels   = ((cgltf_animation *)anim->handle)->channels;
+        int  currentKey = -1;
+        int  nextKey    = -1;
 
-            // if channel target matches current joint
-            if (channel->target_node == _currentAnimation->joints[joint_idx]) { // && target_path!!!
+        auto *sampler = channels[channel_idx].sampler;
+        for (size_t timestamp_idx = 0; timestamp_idx < sampler->input->count - 1; timestamp_idx++) {
+            float sampled_time = readFloatFromAccessor(sampler->input, timestamp_idx + 1);
+            float sampled_time_prev;
 
-                int currentKey = -1;
-                int nextKey    = -1;
-
-                cgltf_animation_sampler *sampler = channel->sampler;
-                for (size_t timestamp_idx = 0; timestamp_idx < sampler->input->count - 1; timestamp_idx++) {
-                    float sampled_time;
-                    float sampled_time_prev;
-
-                    if ((sampled_time = readFloatFromAccessor(sampler->input, timestamp_idx + 1)) >= animTime) {
-                        currentKey = timestamp_idx;
-                        nextKey    = currentKey + 1;
-                        break;
-                    }
-                }
-
-                assert(currentKey >= 0 && nextKey >= 0);
-
-
-                // todo: currentKey => nextKey interpolation
-                // use slerp for quaternions
-                if (channel->target_path == cgltf_animation_path_type_translation) {
-                    _currentAnimation->currentPoseJointTransforms[joint_idx].translation = getVec3AtKeyframe(sampler, currentKey);
-                } else if (channel->target_path == cgltf_animation_path_type_rotation) {
-                    auto Q                                                            = getQuatAtKeyframe(sampler, currentKey);
-                    _currentAnimation->currentPoseJointTransforms[joint_idx].rotation = glm::eulerAngles(Q);
-                } else if (channel->target_path == cgltf_animation_path_type_scale) {
-                    _currentAnimation->currentPoseJointTransforms[joint_idx].scale = 1.f;
-                }
-
-                _currentAnimation->currentPoseJointTransforms[joint_idx].name = _currentAnimation->joints[joint_idx]->name;
-
-
-
-                if (joint_idx == 0) continue;
-
-                if (_currentAnimation->joints[joint_idx]->parent == _currentAnimation->joints[joint_idx - 1]) {
-                    _currentAnimation->currentPoseJointTransforms[joint_idx].parent       = &_currentAnimation->currentPoseJointTransforms[joint_idx - 1];
-                    _currentAnimation->currentPoseJointTransforms[joint_idx].parent->name = _currentAnimation->currentPoseJointTransforms[joint_idx - 1].name;
-
-                    // _currentAnimation->currentPoseJointTransforms[joint_idx - 1].child       = &_currentAnimation->currentPoseJointTransforms[joint_idx];
-                    // _currentAnimation->currentPoseJointTransforms[joint_idx - 1].child->name = _currentAnimation->currentPoseJointTransforms[joint_idx].name;
-                } else {
-                    // find index of parent joint
-                    auto currentJointParent = _currentAnimation->joints[joint_idx]->parent;
-                    for (size_t i = 0; i < _currentAnimation->jointCount; i++) {
-                        if (_currentAnimation->joints[i] == currentJointParent) {
-                            _currentAnimation->currentPoseJointTransforms[joint_idx].parent       = &_currentAnimation->currentPoseJointTransforms[i];
-                            _currentAnimation->currentPoseJointTransforms[joint_idx].parent->name = _currentAnimation->currentPoseJointTransforms[i].name;
-                        }
-                    }
-                }
+            if (sampled_time > animTime) {
+                currentKey = timestamp_idx;
+                nextKey    = currentKey + 1;
+                break;
             }
-        } // End of channels loop for the current joint
+        }
 
 
+        Transform currentPoseTransform;
 
+        if (channels[channel_idx].target_path == cgltf_animation_path_type_translation) {
+            currentPoseTransform.translation = getVec3AtKeyframe(channels[channel_idx].sampler, currentKey);
+            ++channel_idx;
+        }
+        if (channels[channel_idx].target_path == cgltf_animation_path_type_rotation) {
+            auto Q                        = getQuatAtKeyframe(channels[channel_idx].sampler, currentKey);
+            currentPoseTransform.rotation = glm::eulerAngles(Q);
+            ++channel_idx;
+        }
+        if (channels[channel_idx].target_path == cgltf_animation_path_type_scale) {
+            currentPoseTransform.scale = getVec3AtKeyframe(channels[channel_idx].sampler, currentKey);
+            ++channel_idx;
+        }
+
+        auto current_pose_matrix = currentPoseTransform.GetLocalMatrix();
+        auto parent_idx          = anim->_joints[joint_idx].parent;
 
         // comppute global matrix for current joint
-        if (joint_idx == 0) {
-            _currentAnimation->currentPoseJointMatrices[0] = _currentAnimation->currentPoseJointTransforms[0].GetLocalMatrix();
-        } else {
-            _currentAnimation->currentPoseJointMatrices[joint_idx] = _currentAnimation->currentPoseJointTransforms[joint_idx].ComputeGlobalMatrix();
-        }
-        glm::mat4 *invBindMatrices                           = ((glm::mat4 *)((uint8_t *)((cgltf_data *)_meshData.ptr)->skins->inverse_bind_matrices->buffer_view->buffer->data + ((cgltf_data *)_meshData.ptr)->skins->inverse_bind_matrices->buffer_view->offset));
-        _currentAnimation->finalPoseJointMatrices[joint_idx] = _currentAnimation->currentPoseJointMatrices[joint_idx] * invBindMatrices[joint_idx];
-        // finalPoseJointMatrices[joint_idx]   = currentPoseJointMatrices[joint_idx] * glm::inverse(bindPoseLocalJointTransforms[joint_idx].ComputeGlobalMatrix());
+        if (parent_idx == -1 && joint_idx > 0)
+            anim->_joints[joint_idx].global_joint_matrix = current_pose_matrix;
+        else if (joint_idx == 0)
+            anim->_joints[0].global_joint_matrix = current_pose_matrix;
+        else
+            anim->_joints[joint_idx].global_joint_matrix = anim->_joints[parent_idx].global_joint_matrix * current_pose_matrix;
+
+        anim->joint_matrices[joint_idx] = anim->_joints[joint_idx].global_joint_matrix * anim->_joints[joint_idx].inv_bind_matrix;
     } // End of Joints loop
 }
