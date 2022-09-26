@@ -137,6 +137,10 @@ void SkinnedModel::Draw(float dt)
 
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, _data_buffer_id);
 
+    phi += dt * 1.f;
+    phi                = fmodf(phi, 360);
+    glm::vec3 lightDir = { cosf(phi), -.5, sinf(phi) * .1f };
+
     for (size_t mesh_idx = 0; mesh_idx < this->_meshes.size(); mesh_idx++) {
 
         if (_meshes[mesh_idx].hidden) continue;
@@ -149,9 +153,6 @@ void SkinnedModel::Draw(float dt)
             ShaderSetMat4ByName("view", gCameraInUse->_view, material->_shader->programID);
             ShaderSetMat4ByName("model", model, material->_shader->programID);
             ShaderSetUniformVec3ByName("view_pos", &gCameraInUse->_position, material->_shader->programID);
-
-            phi += dt * 0.1f;
-            glm::vec3 lightDir = { cosf(phi), -.5, sinf(phi) * .1f };
             ShaderSetUniformVec3ByName("light_dir", &lightDir, material->_shader->programID);
 
 
@@ -162,8 +163,8 @@ void SkinnedModel::Draw(float dt)
             ShaderSetUniformIntByName("has_joint_matrices", &has_joint_matrices, material->_shader->programID);
 
             // bind textures here
-            glActiveTexture(GL_TEXTURE0);
-            glBindTexture(GL_TEXTURE_2D, material->base_color_map->id);
+            // glActiveTexture(GL_TEXTURE0);
+            // glBindTexture(GL_TEXTURE_2D, material->base_color_map->id);
 
             glBindVertexArray(_meshes[mesh_idx]._VAOs[submesh_idx]);
             glDrawElements(GL_TRIANGLES, _meshes[mesh_idx]._indices_count[submesh_idx], GL_UNSIGNED_SHORT, (void *)_meshes[mesh_idx]._index_offsets[submesh_idx]);
@@ -171,7 +172,7 @@ void SkinnedModel::Draw(float dt)
         }
     }
 
-    glBindTexture(GL_TEXTURE_2D, 0);
+    // glBindTexture(GL_TEXTURE_2D, 0);
     glUseProgram(0);
 }
 
@@ -237,7 +238,6 @@ void SkinnedModel::Create(const char *path)
             glBindVertexArray(_meshes[mesh_idx]._VAOs[submesh_idx]);
             glBindBuffer(GL_ARRAY_BUFFER, _data_buffer_id);
 
-            // we only ever loop once through the primitives
             for (size_t attrib_idx = 0; attrib_idx < primitives->attributes_count; attrib_idx++) {
                 cgltf_attribute   *attrib = primitives[submesh_idx].attributes + attrib_idx;
                 cgltf_buffer_view *view   = attrib->data->buffer_view;
@@ -495,8 +495,7 @@ void SkinnedModel::AnimationUpdate(float dt)
             ++channel_idx;
         }
         if (channels[channel_idx].target_path == cgltf_animation_path_type_rotation) {
-            auto Q                        = getQuatAtKeyframe(channels[channel_idx].sampler, currentKey);
-            currentPoseTransform.rotation = glm::eulerAngles(Q);
+            currentPoseTransform.rotation = getQuatAtKeyframe(channels[channel_idx].sampler, currentKey);
             ++channel_idx;
         }
         if (channels[channel_idx].target_path == cgltf_animation_path_type_scale) {

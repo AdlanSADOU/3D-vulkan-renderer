@@ -1,3 +1,5 @@
+#if defined(GL) && !defined(VULKAN)
+
 #define CGLTF_IMPLEMENTATION
 #define STB_IMAGE_IMPLEMENTATION
 #include "adgl.h"
@@ -45,7 +47,6 @@ void Example3DInit()
     gTextures.insert({ "ground", TextureCreate("assets/groundProto.png") });
 
     // todo: cache shaders in MaterialCreate
-    gMaterials.insert({ "standard", MaterialCreate("shaders/point.shader", NULL) });
     gMaterials.insert({ "default", MaterialCreate("shaders/standard.shader", gTextures["ground"]) });
     gMaterials.insert({ "groundMaterial", MaterialCreate("shaders/ground.shader", gTextures["ground"]) });
 
@@ -70,7 +71,7 @@ void Example3DInit()
             entities[i].model.Create("assets/warrior/warrior.gltf"); // fixme: if for some reason this fails to load
             // then the following line will crash
             entities[i].model._transform.translation = { startingOffset + x * distanceFactor, 0.f, startingOffset + z * distanceFactor };
-            entities[i].model._transform.rotation    = { 0.f, 0.f, 0.f };
+            entities[i].model._transform.rotation    = glm::quat({0,0,0});
             entities[i].model._transform.scale       = glm::vec3(0.1f);
             entities[i].model._current_animation      = &entities[i].model._animations[0];
             entities[i].model._should_play_animation   = true;
@@ -80,7 +81,7 @@ void Example3DInit()
             // then the following line will crash
             entities[i].model._meshes[0]._materials[0] = gMaterials["default"];
             entities[i].model._transform.translation   = { startingOffset + x * distanceFactor, 0.f, startingOffset + z * distanceFactor };
-            entities[i].model._transform.rotation      = { 0.f, 0.f, 0.f };
+            entities[i].model._transform.rotation      = glm::quat({0,0,0});
             entities[i].model._transform.scale         = glm::vec3(0.1f);
             entities[i].model._current_animation        = &entities[i].model._animations[i % 2];
             entities[i].model._should_play_animation     = true;
@@ -88,7 +89,7 @@ void Example3DInit()
             entities[i].model.Create("assets/chibi_02_ex.gltf"); // fixme: if for some reason this fails to load
             // then the following line will crash
             entities[i].model._transform.translation = { startingOffset + x * distanceFactor, 0.f, startingOffset + z * distanceFactor };
-            entities[i].model._transform.rotation    = { 0.f, 0.f, 0.f };
+            entities[i].model._transform.rotation    = glm::quat({0,0,0});
             entities[i].model._transform.scale       = glm::vec3(10.1f);
             entities[i].model._current_animation      = &entities[i].model._animations[0];
             entities[i].model._should_play_animation   = true;
@@ -132,8 +133,13 @@ void Example3DUpdateDraw(float dt, Input input)
     //
     // Entities
     //
+
+
+    // glMultiDrawElementsIndirect()
+
     for (size_t i = 0; i < entities.size(); i++) {
         entities[i].model.AnimationUpdate(dt);
         entities[i].model.Draw(dt);
     }
 }
+#endif

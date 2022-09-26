@@ -16,6 +16,7 @@
 #include <SDL2/SDL.h>
 #include <GL/glew.h>
 #include <GLM/glm.hpp>
+#include <GLM/gtx/quaternion.hpp>
 #include <GLM/gtc/matrix_transform.hpp>
 #include <stb_image.h>
 #include <cgltf.h>
@@ -40,7 +41,6 @@ static std::unordered_map<std::string, Shader *>   gShaders;
 static std::unordered_map<std::string, Material *> gMaterials;
 static std::unordered_map<std::string, void *>     gSharedMeshes;
 
-
 #define NB_OF_ELEMENTS_IN_ARRAY(arr) (sizeof(arr) / sizeof(arr[0]))
 
 static void printVec(const char *name, glm::vec3 v)
@@ -54,7 +54,7 @@ struct Transform
     Transform  *parent      = {};
     Transform  *child       = {};
     glm::vec3   scale       = {};
-    glm::vec3   rotation    = {};
+    glm::quat   rotation    = {};
     glm::vec3   translation = {};
     glm::mat4   GetLocalMatrix();
     glm::mat4   ComputeGlobalMatrix();
@@ -62,15 +62,10 @@ struct Transform
 
 glm::mat4 Transform::GetLocalMatrix()
 {
-    glm::mat4 m = glm::mat4(1);
 
-    m = glm::translate(glm::mat4(1), translation)
-        * glm::rotate(glm::mat4(1), rotation.z, glm::vec3(0, 0, 1))
-        * glm::rotate(glm::mat4(1), rotation.y, glm::vec3(0, 1, 0))
-        * glm::rotate(glm::mat4(1), rotation.x, glm::vec3(1, 0, 0))
+    return glm::translate(glm::mat4(1), translation)
+        * glm::toMat4(rotation)
         * glm::scale(glm::mat4(1), scale);
-
-    return m;
 }
 
 glm::mat4 Transform::ComputeGlobalMatrix()

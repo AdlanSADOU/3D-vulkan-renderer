@@ -1,3 +1,7 @@
+#include "backend.h"
+
+#if defined(GL) && !defined(VULKAN)
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string>
@@ -87,7 +91,7 @@ extern int main(int argc, char **argv)
     SDL_GLContext glcontext    = SDL_GL_CreateContext(window);
 
     if (SDL_GL_SetSwapInterval(VSYNC) < 0) {
-        SDL_Log("not supported!\n");
+        SDL_Log("VSYNC not supported!\n");
     }
 
     GLenum err = glewInit();
@@ -240,3 +244,4 @@ extern int main(int argc, char **argv)
 
     return 0;
 }
+#endif
