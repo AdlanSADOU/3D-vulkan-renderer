@@ -1,3 +1,5 @@
+#include "backend.h"
+
 #if defined(GL) && !defined(VULKAN)
 
 #define CGLTF_IMPLEMENTATION
