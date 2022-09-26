@@ -8,7 +8,9 @@ if %1 == Debug (
         set COMPILER_FLAGS= -FC -GR- -EHa- -EHsc -EHs -nologo  -MP -std:c++latest /MT /O2
     )
 set VENDOR=../vendor
+set VULKAN_SDK=C:\VulkanSDK\1.3.224.1
 
+set VULKAN=/I %VULKAN_SDK%/Include
 set ASSIMP=/I %VENDOR%/Assimp/include
 set GLEW=/I %VENDOR%/GLEW/include
 set GLM=/I %VENDOR%/GLM
@@ -16,25 +18,26 @@ set SDL2=/I %VENDOR%/SDL2/include
 set SINGLE_HEADER=/I %VENDOR%/SingleHeaderLibs
 
 set INC=/I../code/
-set INCLUDES=%INC% %SDL2% %GLEW% %GLM% %SINGLE_HEADER%
+set INCLUDES=%INC% %SDL2% %GLEW% %GLM% %SINGLE_HEADER% %VULKAN%
 
 
 
 set LIBPATH=/LIBPATH:%VENDOR%
-
 set SDL2=%LIBPATH%/SDL2/lib/
 set GLEW=%LIBPATH%/GLEW/lib/Release/x64
 set ASSIMP=%LIBPATH%/Assimp/lib/x64
-set LIB_PATHS=%SDL2% %GLEW%
+
+set VULKAN=/LIBPATH:%VULKAN_SDK%/Lib
+set LIB_PATHS=%SDL2% %GLEW% %VULKAN%
 
 
 
-set LINKED_LIBS= shell32.lib OpenGL32.lib glew32.lib SDL2main.lib SDL2.lib
+set LINKED_LIBS= shell32.lib OpenGL32.lib glew32.lib SDL2main.lib SDL2.lib vulkan-1.lib
 set LINKER_FLAGS=/link %LIB_PATHS% %LINKED_LIBS% /SUBSYSTEM:WINDOWS /time
 
 if not exist build (mkdir build)
 pushd build
 
-cl %COMPILER_FLAGS% /Fe:prog.exe ../code/*.cpp %INCLUDES% %LINKER_FLAGS%
+cl %COMPILER_FLAGS% %INCLUDES% /Fe:prog.exe ../code/*.cpp %LINKER_FLAGS%
 
 popd
