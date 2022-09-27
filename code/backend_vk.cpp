@@ -402,6 +402,14 @@ extern int main(int argc, char **argv)
 
 
 
+    //
+    // Swapchain
+    //
+
+
+
+
+
     SDL_Log("HELLOOOOOO VULKAN!");
 
 
