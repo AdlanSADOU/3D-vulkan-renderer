@@ -163,8 +163,8 @@ void SkinnedModel::Draw(float dt)
             ShaderSetUniformIntByName("has_joint_matrices", &has_joint_matrices, material->_shader->programID);
 
             // bind textures here
-            // glActiveTexture(GL_TEXTURE0);
-            // glBindTexture(GL_TEXTURE_2D, material->base_color_map->id);
+            glActiveTexture(GL_TEXTURE0);
+            glBindTexture(GL_TEXTURE_2D, material->base_color_map->id);
 
             glBindVertexArray(_meshes[mesh_idx]._VAOs[submesh_idx]);
             glDrawElements(GL_TRIANGLES, _meshes[mesh_idx]._indices_count[submesh_idx], GL_UNSIGNED_SHORT, (void *)_meshes[mesh_idx]._index_offsets[submesh_idx]);

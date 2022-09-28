@@ -44,7 +44,7 @@ void main()
     texCoord_0 = TEXCOORD_0;
     // texCoord_1 = TEXCOORD_1;
     normal =  NORMAL;
-    color = vec4(1,1,1,1)*10;
+    color = vec4(1,1,1,1);
 
 }
 
@@ -70,8 +70,8 @@ void main()
 {
     // FragColor = mix(texture(mapBaseColor, texCoord_0), texture(texSampler1, texCoord_0), 0.2) * inColor;
     vec4 radiance = vec4(color.xyz * dot(normal, -light_dir) + vec3(.9, .9, .9) *1., 1.);
-    FragColor =  radiance;
-    // FragColor = texture(mapBaseColor, texCoord_0) * vec4(1., .4, 1., 1.)*1;
+    // FragColor =  radiance;
+    FragColor = texture(mapBaseColor, texCoord_0) * radiance;
     // FragColor = vec4(normal, 1.);
 }
 

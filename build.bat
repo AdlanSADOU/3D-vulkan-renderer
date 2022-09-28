@@ -5,7 +5,7 @@ if %1 == Debug (
         set COMPILER_FLAGS= -FC -GR- -EHa- -EHsc -EHs -nologo -Zi -Zf -MP -std:c++latest /MTd
     ) ELSE IF %1 == Release (
         echo %1
-        set COMPILER_FLAGS= -FC -GR- -EHa- -EHsc -EHs -nologo  -MP -std:c++latest /MT /O2
+        set COMPILER_FLAGS= -FC -GR- -EHa- -EHsc -EHs -nologo  -MP -std:c++latest /MT /O2 -Zi -Zf
     )
 set VENDOR=../vendor
 

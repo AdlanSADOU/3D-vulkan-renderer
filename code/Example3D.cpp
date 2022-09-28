@@ -54,7 +54,7 @@ void Example3DInit()
 
 
 
-    entities.resize(3);
+    entities.resize(256);
     for (size_t i = 0; i < entities.size(); i++) {
         static float z = 0;
         static float x = 0;
@@ -69,14 +69,14 @@ void Example3DInit()
             z++;
         }
 
-        if (i == 0) {
+        if (1) {
             entities[i].model.Create("assets/warrior/warrior.gltf"); // fixme: if for some reason this fails to load
             // then the following line will crash
             entities[i].model._transform.translation = { startingOffset + x * distanceFactor, 0.f, startingOffset + z * distanceFactor };
             entities[i].model._transform.rotation    = glm::quat({0,0,0});
-            entities[i].model._transform.scale       = glm::vec3(0.1f);
+            entities[i].model._transform.scale       = glm::vec3(10.1f);
             entities[i].model._current_animation      = &entities[i].model._animations[0];
-            entities[i].model._should_play_animation   = true;
+            entities[i].model._should_play_animation   = false;
         }
          else if (i == 1) {
             entities[i].model.Create("assets/capoera.gltf"); // fixme: if for some reason this fails to load
@@ -96,9 +96,6 @@ void Example3DInit()
             entities[i].model._current_animation      = &entities[i].model._animations[0];
             entities[i].model._should_play_animation   = true;
         }
-
-
-        // ComputeLocalJointTransforms((cgltf_data *)entities[i].model._meshData.ptr);
     }
 
     ground.material = gMaterials["groundMaterial"];
