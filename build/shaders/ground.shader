@@ -7,6 +7,7 @@ uniform mat4 view;
 
 out vec2 texCoord;
 
+
 vec3 verts[] = {
     vec3(-1, 0, -1), vec3(1, 0, -1),
     vec3(-1, 0, 1), vec3(1, 0, 1)

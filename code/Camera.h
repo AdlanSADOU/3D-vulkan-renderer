@@ -40,7 +40,7 @@ void Camera::CameraCreate(glm::vec3 position, float fov, float aspect, float nea
     _position = position;
 
     _at         = _position + _forward;
-    _projection = glm::perspective(Radians(_fov), _aspect, _near, _far);
+    _projection = glm::perspective(glm::radians(_fov), _aspect, _near, _far);
     _view       = glm::lookAt(_position, _at, _up);
 }
 
@@ -70,9 +70,9 @@ void Camera::CameraUpdate(Input &input, float dt)
     } else
         SDL_SetRelativeMouseMode(SDL_FALSE);
 
-    _forward.x = cosf(Radians(_yaw)) * cosf(Radians(_pitch));
-    _forward.y = sinf(Radians(_pitch));
-    _forward.z = sinf(Radians(_yaw)) * cosf(Radians(_pitch));
+    _forward.x = cosf(glm::radians(_yaw)) * cosf(glm::radians(_pitch));
+    _forward.y = sinf(glm::radians(_pitch));
+    _forward.z = sinf(glm::radians(_yaw)) * cosf(glm::radians(_pitch));
     _forward   = glm::normalize(_forward);
     xrelPrev   = xrel;
     yrelPrev   = yrel;
