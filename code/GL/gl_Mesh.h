@@ -503,3 +503,39 @@ void SkinnedModel::AnimationUpdate(float dt)
         anim->joint_matrices[joint_idx] = anim->_joints[joint_idx].global_joint_matrix * anim->_joints[joint_idx].inv_bind_matrix;
     } // End of Joints loop
 }
+
+// note: this is unsued right now
+std::vector<Transform> bindPoseLocalJointTransforms;
+static void            ComputeLocalJointTransforms(cgltf_data *data)
+{
+    cgltf_node **joints = data->skins->joints;
+    bindPoseLocalJointTransforms.resize(data->skins->joints_count);
+
+    for (size_t joint_idx = 0; joint_idx < data->skins->joints_count; joint_idx++) {
+        bindPoseLocalJointTransforms[joint_idx].translation = *(glm::vec3 *)joints[joint_idx]->translation;
+        glm::vec3 R                                         = glm::eulerAngles(*(glm::quat *)joints[joint_idx]->rotation);
+        bindPoseLocalJointTransforms[joint_idx].rotation    = R;
+        bindPoseLocalJointTransforms[joint_idx].scale       = glm::vec3(1);
+
+        bindPoseLocalJointTransforms[joint_idx].name = joints[joint_idx]->name;
+
+        if (joint_idx == 0) continue;
+
+        if (joints[joint_idx]->parent == joints[joint_idx - 1]) {
+            bindPoseLocalJointTransforms[joint_idx].parent       = &bindPoseLocalJointTransforms[joint_idx - 1];
+            bindPoseLocalJointTransforms[joint_idx].parent->name = bindPoseLocalJointTransforms[joint_idx - 1].name;
+
+            bindPoseLocalJointTransforms[joint_idx - 1].child       = &bindPoseLocalJointTransforms[joint_idx];
+            bindPoseLocalJointTransforms[joint_idx - 1].child->name = bindPoseLocalJointTransforms[joint_idx].name;
+        } else {
+            // find index of parent joint
+            auto currentJointParent = joints[joint_idx]->parent;
+            for (size_t i = 0; i < data->skins->joints_count; i++) {
+                if (joints[i] == currentJointParent) {
+                    bindPoseLocalJointTransforms[joint_idx].parent       = &bindPoseLocalJointTransforms[i];
+                    bindPoseLocalJointTransforms[joint_idx].parent->name = bindPoseLocalJointTransforms[i].name;
+                }
+            }
+        }
+    }
+}

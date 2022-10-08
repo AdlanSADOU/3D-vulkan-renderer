@@ -1,6 +1,6 @@
 #pragma once
 
-bool LoadCgltfData(const char *path, cgltf_data **data)
+static bool LoadCgltfData(const char *path, cgltf_data **data)
 {
     cgltf_options options = {};
     cgltf_result  result  = cgltf_parse_file(&options, path, &(*data));
@@ -94,40 +94,6 @@ static glm::quat getQuatAtKeyframe(cgltf_animation_sampler *sampler, int keyfram
 
 
 
-// note: this is unsued right now
-std::vector<Transform> bindPoseLocalJointTransforms;
-static void            ComputeLocalJointTransforms(cgltf_data *data)
-{
-    cgltf_node **joints = data->skins->joints;
-    bindPoseLocalJointTransforms.resize(data->skins->joints_count);
-
-    for (size_t joint_idx = 0; joint_idx < data->skins->joints_count; joint_idx++) {
-        bindPoseLocalJointTransforms[joint_idx].translation = *(glm::vec3 *)joints[joint_idx]->translation;
-        glm::vec3 R                                         = glm::eulerAngles(*(glm::quat *)joints[joint_idx]->rotation);
-        bindPoseLocalJointTransforms[joint_idx].rotation    = R;
-        bindPoseLocalJointTransforms[joint_idx].scale       = glm::vec3(1);
-
-        bindPoseLocalJointTransforms[joint_idx].name = joints[joint_idx]->name;
-
-        if (joint_idx == 0) continue;
-
-        if (joints[joint_idx]->parent == joints[joint_idx - 1]) {
-            bindPoseLocalJointTransforms[joint_idx].parent       = &bindPoseLocalJointTransforms[joint_idx - 1];
-            bindPoseLocalJointTransforms[joint_idx].parent->name = bindPoseLocalJointTransforms[joint_idx - 1].name;
-
-            bindPoseLocalJointTransforms[joint_idx - 1].child       = &bindPoseLocalJointTransforms[joint_idx];
-            bindPoseLocalJointTransforms[joint_idx - 1].child->name = bindPoseLocalJointTransforms[joint_idx].name;
-        } else {
-            // find index of parent joint
-            auto currentJointParent = joints[joint_idx]->parent;
-            for (size_t i = 0; i < data->skins->joints_count; i++) {
-                if (joints[i] == currentJointParent) {
-                    bindPoseLocalJointTransforms[joint_idx].parent       = &bindPoseLocalJointTransforms[i];
-                    bindPoseLocalJointTransforms[joint_idx].parent->name = bindPoseLocalJointTransforms[i].name;
-                }
-            }
-        }
-    }
 
 
     // for (size_t joint_idx = 0; joint_idx < data->skins->joints_count; joint_idx++) {
@@ -151,4 +117,3 @@ static void            ComputeLocalJointTransforms(cgltf_data *data)
     //             parent = parent->parent;
     //         }
     // }
-}

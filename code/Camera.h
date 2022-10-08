@@ -23,7 +23,7 @@ struct Camera
 
 
     void CameraCreate(glm::vec3 position, float fov, float aspect, float near, float far);
-    void CameraUpdate(Input &input, float dt);
+    void CameraUpdate(Input *input, float dt);
 };
 static Camera *gCameraInUse;
 
@@ -44,16 +44,16 @@ void Camera::CameraCreate(glm::vec3 position, float fov, float aspect, float nea
     _view       = glm::lookAt(_position, _at, _up);
 }
 
-void Camera::CameraUpdate(Input &input, float dt)
+void Camera::CameraUpdate(Input *input, float dt)
 {
-    if (input.up) _position += _forward * _speed * dt;
-    if (input.down) _position -= _forward * _speed * dt;
-    if (input.left) _position -= glm::normalize(glm::cross(_forward, _up)) * _speed * dt;
-    if (input.right) _position += glm::normalize(glm::cross(_forward, _up)) * _speed * dt;
+    if (input->up) _position += _forward * _speed * dt;
+    if (input->down) _position -= _forward * _speed * dt;
+    if (input->left) _position -= glm::normalize(glm::cross(_forward, _up)) * _speed * dt;
+    if (input->right) _position += glm::normalize(glm::cross(_forward, _up)) * _speed * dt;
 
     float factor = 0;
-    if (input.E) factor -= 1.f;
-    if (input.Q) factor += 1.f;
+    if (input->E) factor -= 1.f;
+    if (input->Q) factor += 1.f;
     _position.y += factor * dt / _sensitivity;
 
     static float xrelPrev = 0;
@@ -62,7 +62,7 @@ void Camera::CameraUpdate(Input &input, float dt)
     int          yrel;
 
     SDL_GetRelativeMouseState(&xrel, &yrel);
-    if (input.mouse.right) {
+    if (input->mouse.right) {
         SDL_SetRelativeMouseMode(SDL_TRUE);
 
         if (xrelPrev != xrel) _yaw += (float)xrel * _sensitivity;

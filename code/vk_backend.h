@@ -9,6 +9,9 @@
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_vulkan.h>
 
+// #define GLM_FORCE_DEFAULT_ALIGNED_GENTYPES
+// #define GLM_FORCE_LEFT_HANDED
+#define GLM_FORCE_DEPTH_ZERO_TO_ONE
 #include <GLM/glm.hpp>
 #include <GLM/gtx/quaternion.hpp>
 #include <GLM/gtc/matrix_transform.hpp>
@@ -19,74 +22,90 @@
 #include <vulkan/vulkan.h>
 
 
-float triangle_vertices[] {
-    // POSITIONS
-    1, 1, 0,
-    -1, 1, 0,
-    0, -1, 0,
-    // COLOR
-    1, 0, 0,
-    0, 1, 0,
-    0, 0, 1
-};
-
-uint16_t triangle_indices[] = {
-    // indices
-    0, 1, 2,
-    1, 3, 2
-};
-
-static std::unordered_map<VkResult, std::string> vulkan_errors = {
-    { (VkResult)0, "VK_SUCCESS" },
-    { (VkResult)1, "VK_NOT_READY" },
-    { (VkResult)2, "VK_TIMEOUT" },
-    { (VkResult)3, "VK_EVENT_SET" },
-    { (VkResult)4, "VK_EVENT_RESET" },
-    { (VkResult)5, "VK_INCOMPLETE" },
-    { (VkResult)-1, "VK_ERROR_OUT_OF_HOST_MEMORY" },
-    { (VkResult)-2, "VK_ERROR_OUT_OF_DEVICE_MEMORY" },
-    { (VkResult)-3, "VK_ERROR_INITIALIZATION_FAILED" },
-    { (VkResult)-4, "VK_ERROR_DEVICE_LOST" },
-    { (VkResult)-5, "VK_ERROR_MEMORY_MAP_FAILED" },
-    { (VkResult)-6, "VK_ERROR_LAYER_NOT_PRESENT" },
-    { (VkResult)-7, "VK_ERROR_EXTENSION_NOT_PRESENT" },
-    { (VkResult)-8, "VK_ERROR_FEATURE_NOT_PRESENT" },
-    { (VkResult)-9, "VK_ERROR_INCOMPATIBLE_DRIVER" },
-    { (VkResult)-10, "VK_ERROR_TOO_MANY_OBJECTS" },
-    { (VkResult)-11, "VK_ERROR_FORMAT_NOT_SUPPORTED" },
-    { (VkResult)-12, "VK_ERROR_FRAGMENTED_POOL" },
-    { (VkResult)-13, "VK_ERROR_UNKNOWN" },
-    { (VkResult)-1000069000, "VK_ERROR_OUT_OF_POOL_MEMORY" },
-    { (VkResult)-1000072003, "VK_ERROR_INVALID_EXTERNAL_HANDLE" },
-    { (VkResult)-1000161000, "VK_ERROR_FRAGMENTATION" },
-    { (VkResult)-1000257000, "VK_ERROR_INVALID_OPAQUE_CAPTURE_ADDRESS" },
-    { (VkResult)-1000000000, "VK_ERROR_SURFACE_LOST_KHR" },
-    { (VkResult)-1000000001, "VK_ERROR_NATIVE_WINDOW_IN_USE_KHR" },
-    { (VkResult)1000001003, "VK_SUBOPTIMAL_KHR" },
-    { (VkResult)-1000001004, "VK_ERROR_OUT_OF_DATE_KHR" },
-    { (VkResult)-1000003001, "VK_ERROR_INCOMPATIBLE_DISPLAY_KHR" },
-    { (VkResult)-1000011001, "VK_ERROR_VALIDATION_FAILED_EXT" },
-    { (VkResult)-1000012000, "VK_ERROR_INVALID_SHADER_NV" },
-    { (VkResult)-1000158000, "VK_ERROR_INVALID_DRM_FORMAT_MODIFIER_PLANE_LAYOUT_EXT" },
-    { (VkResult)-1000174001, "VK_ERROR_NOT_PERMITTED_EXT" },
-    { (VkResult)-1000255000, "VK_ERROR_FULL_SCREEN_EXCLUSIVE_MODE_LOST_EXT" },
-    { (VkResult)1000268000, "VK_THREAD_IDLE_KHR" },
-    { (VkResult)1000268001, "VK_THREAD_DONE_KHR" },
-    { (VkResult)1000268002, "VK_OPERATION_DEFERRED_KHR" },
-    { (VkResult)1000268003, "VK_OPERATION_NOT_DEFERRED_KHR" },
-    { (VkResult)1000297000, "VK_PIPELINE_COMPILE_REQUIRED_EXT" },
-    { VK_ERROR_OUT_OF_POOL_MEMORY, "VK_ERROR_OUT_OF_POOL_MEMORY_KHR" },
-    { VK_ERROR_INVALID_EXTERNAL_HANDLE, "VK_ERROR_INVALID_EXTERNAL_HANDLE_KHR" },
-    { VK_ERROR_FRAGMENTATION, "VK_ERROR_FRAGMENTATION_EXT" },
-    { VK_ERROR_INVALID_OPAQUE_CAPTURE_ADDRESS, "VK_ERROR_INVALID_DEVICE_ADDRESS_EXT" },
-    { VK_ERROR_INVALID_OPAQUE_CAPTURE_ADDRESS, "VK_ERROR_INVALID_OPAQUE_CAPTURE_ADDRESS_KHR" },
-    { VK_PIPELINE_COMPILE_REQUIRED_EXT, "VK_ERROR_PIPELINE_COMPILE_REQUIRED_EXT" },
-    { (VkResult)0x7FFFFFFF, "VK_RESULT_MAX_ENUM" }
-};
 
 
 
 #define PROMPT_GPU_SELECTION_AT_STARTUP 0
+
+
+
+
+#define SECONDS(value) (1000000000 * value)
+#define ARR_COUNT(arr) (sizeof(arr) / sizeof(arr[0]))
+
+struct Camera;
+
+struct Input
+{
+    bool up;
+    bool down;
+    bool left;
+    bool right;
+    bool Q;
+    bool E;
+
+    struct Mouse
+    {
+        int32_t xrel;
+        int32_t yrel;
+        bool    left;
+        bool    right;
+    } mouse;
+} input = {};
+
+Camera *gActive_camera;
+
+////////////////////////////
+// Vulkan specific
+
+static std::unordered_map<VkResult, std::string>
+    vulkan_errors = {
+        { (VkResult)0, "VK_SUCCESS" },
+        { (VkResult)1, "VK_NOT_READY" },
+        { (VkResult)2, "VK_TIMEOUT" },
+        { (VkResult)3, "VK_EVENT_SET" },
+        { (VkResult)4, "VK_EVENT_RESET" },
+        { (VkResult)5, "VK_INCOMPLETE" },
+        { (VkResult)-1, "VK_ERROR_OUT_OF_HOST_MEMORY" },
+        { (VkResult)-2, "VK_ERROR_OUT_OF_DEVICE_MEMORY" },
+        { (VkResult)-3, "VK_ERROR_INITIALIZATION_FAILED" },
+        { (VkResult)-4, "VK_ERROR_DEVICE_LOST" },
+        { (VkResult)-5, "VK_ERROR_MEMORY_MAP_FAILED" },
+        { (VkResult)-6, "VK_ERROR_LAYER_NOT_PRESENT" },
+        { (VkResult)-7, "VK_ERROR_EXTENSION_NOT_PRESENT" },
+        { (VkResult)-8, "VK_ERROR_FEATURE_NOT_PRESENT" },
+        { (VkResult)-9, "VK_ERROR_INCOMPATIBLE_DRIVER" },
+        { (VkResult)-10, "VK_ERROR_TOO_MANY_OBJECTS" },
+        { (VkResult)-11, "VK_ERROR_FORMAT_NOT_SUPPORTED" },
+        { (VkResult)-12, "VK_ERROR_FRAGMENTED_POOL" },
+        { (VkResult)-13, "VK_ERROR_UNKNOWN" },
+        { (VkResult)-1000069000, "VK_ERROR_OUT_OF_POOL_MEMORY" },
+        { (VkResult)-1000072003, "VK_ERROR_INVALID_EXTERNAL_HANDLE" },
+        { (VkResult)-1000161000, "VK_ERROR_FRAGMENTATION" },
+        { (VkResult)-1000257000, "VK_ERROR_INVALID_OPAQUE_CAPTURE_ADDRESS" },
+        { (VkResult)-1000000000, "VK_ERROR_SURFACE_LOST_KHR" },
+        { (VkResult)-1000000001, "VK_ERROR_NATIVE_WINDOW_IN_USE_KHR" },
+        { (VkResult)1000001003, "VK_SUBOPTIMAL_KHR" },
+        { (VkResult)-1000001004, "VK_ERROR_OUT_OF_DATE_KHR" },
+        { (VkResult)-1000003001, "VK_ERROR_INCOMPATIBLE_DISPLAY_KHR" },
+        { (VkResult)-1000011001, "VK_ERROR_VALIDATION_FAILED_EXT" },
+        { (VkResult)-1000012000, "VK_ERROR_INVALID_SHADER_NV" },
+        { (VkResult)-1000158000, "VK_ERROR_INVALID_DRM_FORMAT_MODIFIER_PLANE_LAYOUT_EXT" },
+        { (VkResult)-1000174001, "VK_ERROR_NOT_PERMITTED_EXT" },
+        { (VkResult)-1000255000, "VK_ERROR_FULL_SCREEN_EXCLUSIVE_MODE_LOST_EXT" },
+        { (VkResult)1000268000, "VK_THREAD_IDLE_KHR" },
+        { (VkResult)1000268001, "VK_THREAD_DONE_KHR" },
+        { (VkResult)1000268002, "VK_OPERATION_DEFERRED_KHR" },
+        { (VkResult)1000268003, "VK_OPERATION_NOT_DEFERRED_KHR" },
+        { (VkResult)1000297000, "VK_PIPELINE_COMPILE_REQUIRED_EXT" },
+        { VK_ERROR_OUT_OF_POOL_MEMORY, "VK_ERROR_OUT_OF_POOL_MEMORY_KHR" },
+        { VK_ERROR_INVALID_EXTERNAL_HANDLE, "VK_ERROR_INVALID_EXTERNAL_HANDLE_KHR" },
+        { VK_ERROR_FRAGMENTATION, "VK_ERROR_FRAGMENTATION_EXT" },
+        { VK_ERROR_INVALID_OPAQUE_CAPTURE_ADDRESS, "VK_ERROR_INVALID_DEVICE_ADDRESS_EXT" },
+        { VK_ERROR_INVALID_OPAQUE_CAPTURE_ADDRESS, "VK_ERROR_INVALID_OPAQUE_CAPTURE_ADDRESS_KHR" },
+        { VK_PIPELINE_COMPILE_REQUIRED_EXT, "VK_ERROR_PIPELINE_COMPILE_REQUIRED_EXT" },
+        { (VkResult)0x7FFFFFFF, "VK_RESULT_MAX_ENUM" }
+    };
 
 #if defined(_DEBUG)
 #define VKCHECK(x)                                                                                      \
@@ -100,10 +119,6 @@ static std::unordered_map<VkResult, std::string> vulkan_errors = {
 #define VKCHECK(x) x
 #endif
 
-
-
-#define SECONDS(value) (1000000000 * value)
-#define ARR_COUNT(arr) (sizeof(arr) / sizeof(arr[0]))
 
 // VK_PRESENT_MODE_FIFO_KHR; // widest support / VSYNC
 // VK_PRESENT_MODE_IMMEDIATE_KHR; // present as fast as possible, high tearing chance
@@ -145,20 +160,39 @@ struct Swapchain
     void     Create(VkDevice device, VkPhysicalDevice physical_device, VkSurfaceKHR surface, VkSwapchainKHR old_swapchain);
 } gSwapchain;
 
+
+struct Buffer
+{
+    VkBuffer      handle;
+    VmaAllocation vma_allocation;
+};
+
+
+struct UBOData
+{
+    alignas(16) glm::mat4 projection;
+    alignas(16) glm::mat4 view;
+    alignas(16) glm::mat4 model;
+} UBO_data;
+
 struct FrameData
 {
+    Buffer          UBO;
     VkSemaphore     present_semaphore       = {};
     VkSemaphore     render_semaphore        = {};
     VkFence         render_fence            = {};
     VkFence         compute_fence           = {};
     VkCommandBuffer graphics_command_buffer = {};
     VkCommandBuffer compute_command_buffer  = {};
-    VkDescriptorSet model_desc_set          = {};
+    VkDescriptorSet UBO_set                 = {};
     uint32_t        image_idx               = 0;
 };
 std::vector<FrameData> gFrames;
 
-VkPipeline gDefault_graphics_pipeline;
+VkPipeline                         gDefault_graphics_pipeline;
+VkPipelineLayout                   gDefault_graphics_pipeline_layout;
+std::vector<VkDescriptorSet>       gDescriptor_sets;
+std::vector<VkDescriptorSetLayout> gDescriptor_set_layouts;
 
 uint32_t WIDTH  = 800;
 uint32_t HEIGHT = 600;
@@ -335,7 +369,7 @@ static void CreateGraphicsPipeline(VkDevice device, VkPipeline *pipeline)
     raster_state_ci.depthClampEnable;
     raster_state_ci.rasterizerDiscardEnable = VK_FALSE;
     raster_state_ci.polygonMode             = VK_POLYGON_MODE_FILL;
-    raster_state_ci.cullMode                = VK_CULL_MODE_FRONT_BIT;
+    raster_state_ci.cullMode                = VK_CULL_MODE_BACK_BIT;
     raster_state_ci.frontFace               = VK_FRONT_FACE_COUNTER_CLOCKWISE;
     raster_state_ci.depthBiasEnable;
     raster_state_ci.depthBiasConstantFactor;
@@ -407,6 +441,31 @@ static void CreateGraphicsPipeline(VkDevice device, VkPipeline *pipeline)
     viewport_state_ci.scissorCount  = 1;
     viewport_state_ci.pScissors     = NULL;
 
+
+
+
+    //
+    // Depth/Stencil state
+    //
+    VkPipelineDepthStencilStateCreateInfo depth_stencil_state_ci {};
+    depth_stencil_state_ci.sType            = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
+    depth_stencil_state_ci.depthTestEnable  = VK_TRUE; // tests wether fragment sould be discarded
+    depth_stencil_state_ci.depthWriteEnable = VK_TRUE; // should depth test result be written to depth buffer?
+    depth_stencil_state_ci.depthCompareOp   = VK_COMPARE_OP_LESS; // keeps fragments that are closer (lower depth)
+
+    // Optional: what is stencil for[check]?
+    // depth_stencil_state_ci.stencilTestEnable;
+    // depth_stencil_state_ci.front;
+    // depth_stencil_state_ci.back;
+
+    // Optional: allows to specify bounds
+    // depth_stencil_state_ci.depthBoundsTestEnable;
+    // depth_stencil_state_ci.minDepthBounds;
+    // depth_stencil_state_ci.maxDepthBounds;
+
+
+
+
     //
     // Color blend state
     //
@@ -418,10 +477,7 @@ static void CreateGraphicsPipeline(VkDevice device, VkPipeline *pipeline)
     color_blend_attachment_state.srcAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
     color_blend_attachment_state.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
     color_blend_attachment_state.alphaBlendOp        = VK_BLEND_OP_ADD;
-    color_blend_attachment_state.colorWriteMask      = VK_COLOR_COMPONENT_R_BIT
-        | VK_COLOR_COMPONENT_G_BIT
-        | VK_COLOR_COMPONENT_B_BIT
-        | VK_COLOR_COMPONENT_A_BIT;
+    color_blend_attachment_state.colorWriteMask      = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
 
     VkPipelineColorBlendStateCreateInfo color_blend_state_ci {};
     color_blend_state_ci.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
@@ -434,18 +490,20 @@ static void CreateGraphicsPipeline(VkDevice device, VkPipeline *pipeline)
     color_blend_state_ci.blendConstants[2] = 1.f;
     color_blend_state_ci.blendConstants[3] = 1.f;
 
+
+
     //
     // Pipeline layout
     //
     VkPipelineLayoutCreateInfo layout_ci {};
-    layout_ci.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-    layout_ci.setLayoutCount;
-    layout_ci.pSetLayouts;
+    layout_ci.sType          = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+    layout_ci.setLayoutCount = gDescriptor_set_layouts.size();
+    layout_ci.pSetLayouts    = &gDescriptor_set_layouts[0];
     layout_ci.pushConstantRangeCount;
     layout_ci.pPushConstantRanges;
 
-    VkPipelineLayout layout;
-    vkCreatePipelineLayout(device, &layout_ci, NULL, &layout);
+    vkCreatePipelineLayout(device, &layout_ci, NULL, &gDefault_graphics_pipeline_layout);
+
 
     //
     // Pipeline state
@@ -466,20 +524,35 @@ static void CreateGraphicsPipeline(VkDevice device, VkPipeline *pipeline)
     pipeline_ci.pViewportState      = &viewport_state_ci;
     pipeline_ci.pRasterizationState = &raster_state_ci;
     pipeline_ci.pMultisampleState;
-    pipeline_ci.pDepthStencilState;
-    pipeline_ci.pColorBlendState = &color_blend_state_ci;
-    pipeline_ci.pDynamicState    = &dynamic_state_ci;
-    pipeline_ci.layout           = layout;
+    pipeline_ci.pDepthStencilState = &depth_stencil_state_ci;
+    pipeline_ci.pColorBlendState   = &color_blend_state_ci;
+    pipeline_ci.pDynamicState      = &dynamic_state_ci;
+    pipeline_ci.layout             = gDefault_graphics_pipeline_layout;
     pipeline_ci.renderPass;
     pipeline_ci.subpass;
     pipeline_ci.basePipelineHandle;
     pipeline_ci.basePipelineIndex;
 
-
     VKCHECK(vkCreateGraphicsPipelines(device, 0, 1, &pipeline_ci, NULL, pipeline));
 }
 
+/////////////////////////////////
+// vulkan utility functions
 
+VkResult CreateBuffer(VkBuffer *buffer, VkDeviceSize size, VmaAllocation *allocation, VkBufferUsageFlags buffer_usage, VmaAllocationCreateFlags allocation_flags, VmaMemoryUsage memory_usage)
+{
+    VkBufferCreateInfo buffer_ci {};
+    buffer_ci.sType       = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    buffer_ci.size        = size;
+    buffer_ci.usage       = buffer_usage;
+    buffer_ci.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+    VmaAllocationCreateInfo vma_allocation_ci {};
+    vma_allocation_ci.flags = allocation_flags;
+    vma_allocation_ci.usage = memory_usage;
+
+    return vmaCreateBuffer(gAllocator, &buffer_ci, &vma_allocation_ci, buffer, allocation, NULL);
+}
 
 
 #endif

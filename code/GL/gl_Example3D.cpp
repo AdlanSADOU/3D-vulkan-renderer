@@ -1,8 +1,13 @@
 #include "backend.h"
 
-
+#if !defined(CGLTF_IMPLEMENTATION)
 #define CGLTF_IMPLEMENTATION
+#endif
+
+#if !defined(STB_IMAGE_IMPLEMENTATION)
 #define STB_IMAGE_IMPLEMENTATION
+#endif
+
 #include "adgl.h"
 #include "utils.h"
 

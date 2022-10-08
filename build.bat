@@ -38,6 +38,6 @@ set LINKER_FLAGS=/link %LIB_PATHS% %LINKED_LIBS% /SUBSYSTEM:CONSOLE /time
 if not exist build (mkdir build)
 pushd build
 
-cl %COMPILER_FLAGS% %INCLUDES% /Fe:prog.exe ../code/*.cpp ../code/GL/*.cpp %LINKER_FLAGS%
+cl %COMPILER_FLAGS% %INCLUDES% /Fe:prog.exe ../code/*.cpp  %LINKER_FLAGS%
 
 popd
