@@ -8,6 +8,8 @@
 #define STB_IMAGE_IMPLEMENTATION
 #endif
 
+#define GLM_FORCE_DEPTH_ZERO_TO_ONE
+
 #include "vk_backend.h"
 
 #if defined(VULKAN) && !defined(GL)
@@ -377,6 +379,21 @@ main(int argc, char **argv)
 
 
 
+    //
+    // VMA allocator
+    //
+    {
+        VmaAllocatorCreateInfo vma_allocator_ci {};
+        vma_allocator_ci.instance       = gInstance;
+        vma_allocator_ci.device         = gDevice;
+        vma_allocator_ci.physicalDevice = gPhysical_device;
+
+        vmaCreateAllocator(&vma_allocator_ci, &gAllocator);
+    }
+
+
+
+
 
     //
     // Swapchain
@@ -387,7 +404,6 @@ main(int argc, char **argv)
 
         SDL_Log("HELLOOOOOO VULKAN!");
     }
-
 
 
 
@@ -432,27 +448,50 @@ main(int argc, char **argv)
 
 
 
-
-
-    //
-    // VMA allocator
-    //
     {
-        VmaAllocatorCreateInfo vma_allocator_ci {};
-        vma_allocator_ci.instance       = gInstance;
-        vma_allocator_ci.device         = gDevice;
-        vma_allocator_ci.physicalDevice = gPhysical_device;
+        VkImageMemoryBarrier2 image_memory_barrier_before_rendering = {};
+        image_memory_barrier_before_rendering.sType                 = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
 
-        vmaCreateAllocator(&vma_allocator_ci, &gAllocator);
+        image_memory_barrier_before_rendering.srcStageMask = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+        // image_memory_barrier_before_rendering.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+
+        image_memory_barrier_before_rendering.dstStageMask  = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
+        image_memory_barrier_before_rendering.dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+        image_memory_barrier_before_rendering.oldLayout     = VK_IMAGE_LAYOUT_UNDEFINED;
+        image_memory_barrier_before_rendering.newLayout     = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL;
+
+        image_memory_barrier_before_rendering.image                       = gSwapchain._depth_image.handle;
+        image_memory_barrier_before_rendering.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+        image_memory_barrier_before_rendering.subresourceRange.layerCount = 1;
+        image_memory_barrier_before_rendering.subresourceRange.levelCount = 1;
+ 
+        VkDependencyInfo dependency_info        = {};
+        dependency_info.sType                   = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+        dependency_info.imageMemoryBarrierCount = 1;
+        dependency_info.pImageMemoryBarriers    = &image_memory_barrier_before_rendering;
+
+        VkCommandBufferBeginInfo begin_info = {};
+        begin_info.sType                    = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+        begin_info.flags                    = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+        VKCHECK(vkBeginCommandBuffer(gFrames[0].graphics_command_buffer, &begin_info));
+        vkCmdPipelineBarrier2(gFrames[0].graphics_command_buffer, &dependency_info);
+        VKCHECK(vkEndCommandBuffer(gFrames[0].graphics_command_buffer));
+
+
+        VkCommandBufferSubmitInfo command_buffer_submit_info = {};
+        command_buffer_submit_info.sType                     = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO;
+        command_buffer_submit_info.pNext                     = NULL;
+        command_buffer_submit_info.commandBuffer             = gFrames[0].graphics_command_buffer;
+
+        VkSubmitInfo2 submit_info = {};
+        submit_info.sType         = VK_STRUCTURE_TYPE_SUBMIT_INFO_2;
+        submit_info.flags;
+        submit_info.commandBufferInfoCount = 1;
+        submit_info.pCommandBufferInfos    = &command_buffer_submit_info;
+
+        VKCHECK(vkQueueSubmit2(gQueues._graphics, 1, &submit_info, NULL));
+        vkDeviceWaitIdle(gDevice);
     }
-
-
-
-    //
-    // Depth image
-    //
-
-    // VkImage depth_image;
 
 
     //
@@ -556,14 +595,13 @@ main(int argc, char **argv)
 
 
 
-
     //
     // Pipelines
     //
     CreateGraphicsPipeline(gDevice, &gDefault_graphics_pipeline);
 
 
-    camera.CameraCreate({ 16, 20, 44 }, 45.f, WIDTH / (float)HEIGHT, .8f, 4000.f);
+    camera.CameraCreate({ 0, 20, 44 }, 45.f, WIDTH / (float)HEIGHT, .8f, 4000.f);
     camera._pitch  = -20;
     gActive_camera = &camera;
 
@@ -785,11 +823,11 @@ main(int argc, char **argv)
 
 
                 VkClearValue depth_clear_value {};
-                depth_clear_value.depthStencil.depth = { .5 };
+                depth_clear_value.depthStencil.depth = { 1 };
 
                 VkRenderingAttachmentInfo depth_attachment_info = {};
                 depth_attachment_info.sType                     = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
-                // depth_attachment_info.imageView                 = gSwapchain._image_views[gFrames[frame_in_flight].image_idx];
+                depth_attachment_info.imageView                 = gSwapchain._depth_image_view;
                 depth_attachment_info.imageLayout               = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL_KHR;
                 depth_attachment_info.loadOp                    = VK_ATTACHMENT_LOAD_OP_CLEAR;
                 depth_attachment_info.storeOp                   = VK_ATTACHMENT_STORE_OP_DONT_CARE;

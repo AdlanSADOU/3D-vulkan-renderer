@@ -10,8 +10,6 @@
 #include <SDL2/SDL_vulkan.h>
 
 // #define GLM_FORCE_DEFAULT_ALIGNED_GENTYPES
-// #define GLM_FORCE_LEFT_HANDED
-#define GLM_FORCE_DEPTH_ZERO_TO_ONE
 #include <GLM/glm.hpp>
 #include <GLM/gtx/quaternion.hpp>
 #include <GLM/gtc/matrix_transform.hpp>
@@ -119,6 +117,32 @@ static std::unordered_map<VkResult, std::string>
 #define VKCHECK(x) x
 #endif
 
+///////////////////////////
+// Types
+
+struct Image
+{
+    VkImage       handle;
+    VmaAllocation vma_allocation;
+};
+
+
+struct Buffer
+{
+    VkBuffer      handle;
+    VmaAllocation vma_allocation;
+};
+
+
+struct UBOData
+{
+    alignas(16) glm::mat4 projection;
+    alignas(16) glm::mat4 view;
+    alignas(16) glm::mat4 model;
+} UBO_data;
+
+////////////////////////////
+// Runtime data
 
 // VK_PRESENT_MODE_FIFO_KHR; // widest support / VSYNC
 // VK_PRESENT_MODE_IMMEDIATE_KHR; // present as fast as possible, high tearing chance
@@ -146,7 +170,6 @@ struct Queues
 VkCommandPool   gGraphics_command_pool;
 VkCommandBuffer gGraphics_command_buffer;
 
-
 struct Swapchain
 {
     VkSwapchainKHR _handle = VK_NULL_HANDLE;
@@ -155,25 +178,12 @@ struct Swapchain
     std::vector<VkImage>     _images      = {};
     std::vector<VkImageView> _image_views = {};
     VkFormat                 _format;
-
-    uint32_t _image_count = {};
-    void     Create(VkDevice device, VkPhysicalDevice physical_device, VkSurfaceKHR surface, VkSwapchainKHR old_swapchain);
+    Image                    _depth_image      = {};
+    VkImageView              _depth_image_view = {};
+    uint32_t                 _image_count      = {};
+    void                     Create(VkDevice device, VkPhysicalDevice physical_device, VkSurfaceKHR surface, VkSwapchainKHR old_swapchain);
 } gSwapchain;
 
-
-struct Buffer
-{
-    VkBuffer      handle;
-    VmaAllocation vma_allocation;
-};
-
-
-struct UBOData
-{
-    alignas(16) glm::mat4 projection;
-    alignas(16) glm::mat4 view;
-    alignas(16) glm::mat4 model;
-} UBO_data;
 
 struct FrameData
 {
@@ -273,11 +283,12 @@ void Swapchain::Create(VkDevice device, VkPhysicalDevice physical_device, VkSurf
     _image_views.resize(_image_count);
 
     for (size_t i = 0; i < _image_count; i++) {
-        VkImageViewCreateInfo view_ci           = {};
-        view_ci.sType                           = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-        view_ci.image                           = _images[i];
-        view_ci.viewType                        = VK_IMAGE_VIEW_TYPE_2D;
-        view_ci.format                          = VK_FORMAT_B8G8R8A8_UNORM;
+        VkImageViewCreateInfo view_ci = {};
+        view_ci.sType                 = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+        view_ci.image                 = _images[i];
+        view_ci.viewType              = VK_IMAGE_VIEW_TYPE_2D;
+        view_ci.format                = VK_FORMAT_B8G8R8A8_UNORM;
+
         view_ci.components.r                    = VK_COMPONENT_SWIZZLE_R;
         view_ci.components.g                    = VK_COMPONENT_SWIZZLE_G;
         view_ci.components.b                    = VK_COMPONENT_SWIZZLE_B;
@@ -289,6 +300,59 @@ void Swapchain::Create(VkDevice device, VkPhysicalDevice physical_device, VkSurf
         view_ci.subresourceRange.layerCount     = 1;
         VKCHECK(vkCreateImageView(device, &view_ci, NULL, &_image_views[i]));
     }
+
+    //
+    // Depth image
+    //
+
+    // if (_depth_image.handle != VK_NULL_HANDLE)
+    //      vkDestroyImageView(_device, _depthImageView, nullptr);
+    // 	    vmaDestroyImage(_allocator, _depthImage._image, _depthImage._allocation);
+
+
+    VkImageCreateInfo depth_image_ci {};
+    depth_image_ci.sType     = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+    depth_image_ci.imageType = VK_IMAGE_TYPE_2D;
+    depth_image_ci.format    = VK_FORMAT_D16_UNORM;
+
+    depth_image_ci.extent.width  = WIDTH;
+    depth_image_ci.extent.height = HEIGHT;
+    depth_image_ci.extent.depth  = 1;
+
+    depth_image_ci.mipLevels   = 1;
+    depth_image_ci.arrayLayers = 1;
+    depth_image_ci.samples     = VK_SAMPLE_COUNT_1_BIT;
+    depth_image_ci.tiling      = VK_IMAGE_TILING_OPTIMAL; // use VK_IMAGE_TILING_LINEAR if CPU writes are intended
+    depth_image_ci.usage       = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+    depth_image_ci.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    // depth_image_ci.queueFamilyIndexCount;
+    // depth_image_ci.pQueueFamilyIndices;
+    depth_image_ci.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+
+    VmaAllocationCreateInfo vma_depth_alloc_ci {};
+    vma_depth_alloc_ci.usage         = VMA_MEMORY_USAGE_GPU_ONLY;
+    vma_depth_alloc_ci.requiredFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+
+    VKCHECK(vmaCreateImage(gAllocator, &depth_image_ci, &vma_depth_alloc_ci, &_depth_image.handle, &_depth_image.vma_allocation, NULL));
+
+    VkImageViewCreateInfo depth_view_ci {};
+    depth_view_ci.sType    = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+    depth_view_ci.image    = _depth_image.handle;
+    depth_view_ci.viewType = VK_IMAGE_VIEW_TYPE_2D;
+    depth_view_ci.format   = VK_FORMAT_D16_UNORM;
+
+    depth_view_ci.components.r                = VK_COMPONENT_SWIZZLE_R;
+    depth_view_ci.components.g                = VK_COMPONENT_SWIZZLE_G;
+    depth_view_ci.components.b                = VK_COMPONENT_SWIZZLE_B;
+    depth_view_ci.components.a                = VK_COMPONENT_SWIZZLE_A;
+    depth_view_ci.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+    depth_view_ci.subresourceRange.levelCount = 1;
+    depth_view_ci.subresourceRange.layerCount = 1;
+    VKCHECK(vkCreateImageView(device, &depth_view_ci, NULL, &_depth_image_view));
+
+
+
+
 }
 
 bool CreateShaderModule(VkDevice device, const char *filepath, VkShaderModule *out_ShaderModule)
@@ -451,7 +515,7 @@ static void CreateGraphicsPipeline(VkDevice device, VkPipeline *pipeline)
     depth_stencil_state_ci.sType            = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
     depth_stencil_state_ci.depthTestEnable  = VK_TRUE; // tests wether fragment sould be discarded
     depth_stencil_state_ci.depthWriteEnable = VK_TRUE; // should depth test result be written to depth buffer?
-    depth_stencil_state_ci.depthCompareOp   = VK_COMPARE_OP_LESS; // keeps fragments that are closer (lower depth)
+    depth_stencil_state_ci.depthCompareOp   = VK_COMPARE_OP_LESS_OR_EQUAL; // keeps fragments that are closer (lower depth)
 
     // Optional: what is stencil for[check]?
     // depth_stencil_state_ci.stencilTestEnable;
@@ -512,6 +576,7 @@ static void CreateGraphicsPipeline(VkDevice device, VkPipeline *pipeline)
     rendering_ci.sType                   = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO;
     rendering_ci.colorAttachmentCount    = 1;
     rendering_ci.pColorAttachmentFormats = &gSwapchain._format;
+    rendering_ci.depthAttachmentFormat   = VK_FORMAT_D16_UNORM;
 
     VkGraphicsPipelineCreateInfo pipeline_ci {};
     pipeline_ci.sType               = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
