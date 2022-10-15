@@ -111,6 +111,7 @@ struct SkinnedModel
     char *assetFolder = {};
 
     std::vector<skinnedMesh> _meshes = {};
+
     std::vector<Animation>   _animations;
     Animation               *_current_animation     = {};
     bool                     _should_play_animation = true;

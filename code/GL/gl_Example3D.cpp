@@ -59,13 +59,13 @@ void Example3DInit()
 
 
 
-    entities.resize(3);
+    entities.resize(1024);
     for (size_t i = 0; i < entities.size(); i++) {
         static float z = 0;
         static float x = 0;
 
         int   distanceFactor      = 24;
-        int   max_entities_on_row = 12;
+        int   max_entities_on_row = 64;
         float startingOffset      = 0.f;
 
         if (i > 0) x++;
@@ -78,29 +78,45 @@ void Example3DInit()
             entities[i].model.Create("assets/warrior/warrior.gltf"); // fixme: if for some reason this fails to load
             // then the following line will crash
             entities[i].model._transform.translation = { startingOffset + x * distanceFactor, 0.f, startingOffset + z * distanceFactor };
-            entities[i].model._transform.rotation    = glm::quat({0,0,0});
-            entities[i].model._transform.scale       = glm::vec3(0.1f);
-            entities[i].model._current_animation      = &entities[i].model._animations[0];
-            entities[i].model._should_play_animation   = true;
-        }
-         else if (i == 1) {
-            entities[i].model.Create("assets/capoera.gltf"); // fixme: if for some reason this fails to load
+            entities[i].model._transform.rotation    = glm::quat({ 0, 0, 0 });
+            entities[i].model._transform.scale       = glm::vec3(10.0f);
+            // entities[i].model._current_animation     = &entities[i].model._animations[0];
+            // entities[i].model._should_play_animation = true;
+        } else {
+            // entities[i].model.Create("assets/warrior/warrior.gltf"); // fixme: if for some reason this fails to load
             // then the following line will crash
-            entities[i].model._meshes[0]._materials[0] = gMaterials["default"];
-            entities[i].model._transform.translation   = { startingOffset + x * distanceFactor, 0.f, startingOffset + z * distanceFactor };
-            entities[i].model._transform.rotation      = glm::quat({0,0,0});
-            entities[i].model._transform.scale         = glm::vec3(0.1f);
-            entities[i].model._current_animation        = &entities[i].model._animations[i % 2];
-            entities[i].model._should_play_animation     = true;
-        } else if (i == 2) {
-            entities[i].model.Create("assets/chibi_02_ex.gltf"); // fixme: if for some reason this fails to load
-            // then the following line will crash
+            entities[i].model._data_buffer_id = entities[0].model._data_buffer_id;
+            entities[i].model._meshes         = entities[0].model._meshes;
+            entities[i].model._mesh_data      = entities[0].model._mesh_data;
+            // entities[i].model.vertex_buffer            = entities[0].model.vertex_buffer;
+            // entities[i].model.vertex_buffer_allocation = entities[0].model.vertex_buffer_allocation;
+
             entities[i].model._transform.translation = { startingOffset + x * distanceFactor, 0.f, startingOffset + z * distanceFactor };
-            entities[i].model._transform.rotation    = glm::quat({0,0,0});
-            entities[i].model._transform.scale       = glm::vec3(10.1f);
-            entities[i].model._current_animation      = &entities[i].model._animations[0];
-            entities[i].model._should_play_animation   = true;
+            entities[i].model._transform.rotation    = glm::quat({ 0, 0, 0 });
+            entities[i].model._transform.scale       = glm::vec3(10.0f);
+            // entities[i].model._current_animation     = &entities[i].model._animations[0];
+            // entities[i].model._should_play_animation = true;
         }
+
+
+        // else if (i == 1) {
+        //     entities[i].model.Create("assets/capoera.gltf"); // fixme: if for some reason this fails to load
+        //     // then the following line will crash
+        //     // entities[i].model._meshes[0]._materials[0] = gMaterials["default"];
+        //     entities[i].model._transform.translation = { startingOffset + x * distanceFactor, 0.f, startingOffset + z * distanceFactor };
+        //     entities[i].model._transform.rotation    = glm::quat({ 0, 0, 0 });
+        //     entities[i].model._transform.scale       = glm::vec3(.1f);
+        //     // entities[i].model._current_animation       = &entities[i].model._animations[i % 2];
+        //     // entities[i].model._should_play_animation   = true;
+        // } else if (i == 2) {
+        //     entities[i].model.Create("assets/chibi_02_ex.gltf"); // fixme: if for some reason this fails to load
+        //     // then the following line will crash
+        //     entities[i].model._transform.translation = { startingOffset + x * distanceFactor, 0.f, startingOffset + z * distanceFactor };
+        //     entities[i].model._transform.rotation    = glm::quat({ 0, 0, 0 });
+        //     entities[i].model._transform.scale       = glm::vec3(10.f);
+        //     // entities[i].model._current_animation     = &entities[i].model._animations[0];
+        //     // entities[i].model._should_play_animation = true;
+        // }
 
 
         // ComputeLocalJointTransforms((cgltf_data *)entities[i].model._meshData.ptr);
@@ -114,7 +130,7 @@ void Example3DInit()
 void Example3DUpdateDraw(float dt, Input input)
 {
     gCameraInUse->_aspect = WND_WIDTH / (float)WND_HEIGHT;
-    gCameraInUse->CameraUpdate(input, dt);
+    gCameraInUse->CameraUpdate(&input, dt);
 
     // draw wireframe
     // glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
@@ -145,7 +161,7 @@ void Example3DUpdateDraw(float dt, Input input)
     // glMultiDrawElementsIndirect()
 
     for (size_t i = 0; i < entities.size(); i++) {
-        entities[i].model.AnimationUpdate(dt);
+        // entities[i].model.AnimationUpdate(dt);
         entities[i].model.Draw(dt);
     }
 }

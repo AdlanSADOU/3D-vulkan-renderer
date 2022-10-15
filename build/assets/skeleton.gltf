@@ -1,0 +1,248 @@
+{
+    "asset" : {
+        "generator" : "Khronos glTF Blender I/O v1.8.19",
+        "version" : "2.0"
+    },
+    "scene" : 0,
+    "scenes" : [
+        {
+            "name" : "Scene",
+            "nodes" : [
+                6
+            ]
+        }
+    ],
+    "nodes" : [
+        {
+            "name" : "bone_04",
+            "rotation" : [
+                -8.305141108166936e-08,
+                -3.0578522824953325e-08,
+                -0.08017736673355103,
+                0.9967806339263916
+            ],
+            "scale" : [
+                0.9999999403953552,
+                1,
+                1
+            ],
+            "translation" : [
+                2.607705695822915e-08,
+                0.42968088388442993,
+                -2.0872192862952943e-14
+            ]
+        },
+        {
+            "children" : [
+                0
+            ],
+            "name" : "bone_03",
+            "rotation" : [
+                2.462273762660061e-08,
+                2.4073655069400957e-08,
+                0.11895415186882019,
+                0.9928997755050659
+            ],
+            "translation" : [
+                2.5233637401811393e-08,
+                0.51856929063797,
+                4.078937555963445e-15
+            ]
+        },
+        {
+            "children" : [
+                1
+            ],
+            "name" : "bone_02",
+            "rotation" : [
+                6.771549720951953e-08,
+                -6.861461798735036e-08,
+                0.02180371806025505,
+                0.9997622966766357
+            ],
+            "scale" : [
+                1,
+                1.0000001192092896,
+                1
+            ],
+            "translation" : [
+                3.752778532373213e-09,
+                0.4918438792228699,
+                2.330777913981698e-16
+            ]
+        },
+        {
+            "children" : [
+                2
+            ],
+            "name" : "bone_01",
+            "rotation" : [
+                -5.5269055998508065e-09,
+                -2.1883947098899625e-08,
+                -0.13498248159885406,
+                0.9908480048179626
+            ],
+            "scale" : [
+                1.0000001192092896,
+                1.0000001192092896,
+                1
+            ],
+            "translation" : [
+                7.179077776697795e-09,
+                0.40112513303756714,
+                3.3422858660492663e-16
+            ]
+        },
+        {
+            "children" : [
+                3
+            ],
+            "name" : "rootBone",
+            "rotation" : [
+                1.4942740378387498e-08,
+                -9.824414171077933e-09,
+                0.0745481476187706,
+                0.9972174167633057
+            ]
+        },
+        {
+            "mesh" : 0,
+            "name" : "Cube",
+            "skin" : 0
+        },
+        {
+            "children" : [
+                5,
+                4
+            ],
+            "name" : "Armature"
+        }
+    ],
+    "meshes" : [
+        {
+            "name" : "Cube.001",
+            "primitives" : [
+                {
+                    "attributes" : {
+                        "POSITION" : 0,
+                        "NORMAL" : 1,
+                        "TEXCOORD_0" : 2,
+                        "JOINTS_0" : 3,
+                        "WEIGHTS_0" : 4
+                    },
+                    "indices" : 5
+                }
+            ]
+        }
+    ],
+    "skins" : [
+        {
+            "inverseBindMatrices" : 6,
+            "joints" : [
+                4,
+                3,
+                2,
+                1,
+                0
+            ],
+            "name" : "Armature"
+        }
+    ],
+    "accessors" : [
+        {
+            "bufferView" : 0,
+            "componentType" : 5126,
+            "count" : 48,
+            "max" : [
+                0.10126254707574844,
+                2.2278318405151367,
+                0.10126254707574844
+            ],
+            "min" : [
+                -0.10126254707574844,
+                0.002318084239959717,
+                -0.10126254707574844
+            ],
+            "type" : "VEC3"
+        },
+        {
+            "bufferView" : 1,
+            "componentType" : 5126,
+            "count" : 48,
+            "type" : "VEC3"
+        },
+        {
+            "bufferView" : 2,
+            "componentType" : 5126,
+            "count" : 48,
+            "type" : "VEC2"
+        },
+        {
+            "bufferView" : 3,
+            "componentType" : 5121,
+            "count" : 48,
+            "type" : "VEC4"
+        },
+        {
+            "bufferView" : 4,
+            "componentType" : 5126,
+            "count" : 48,
+            "type" : "VEC4"
+        },
+        {
+            "bufferView" : 5,
+            "componentType" : 5123,
+            "count" : 108,
+            "type" : "SCALAR"
+        },
+        {
+            "bufferView" : 6,
+            "componentType" : 5126,
+            "count" : 5,
+            "type" : "MAT4"
+        }
+    ],
+    "bufferViews" : [
+        {
+            "buffer" : 0,
+            "byteLength" : 576,
+            "byteOffset" : 0
+        },
+        {
+            "buffer" : 0,
+            "byteLength" : 576,
+            "byteOffset" : 576
+        },
+        {
+            "buffer" : 0,
+            "byteLength" : 384,
+            "byteOffset" : 1152
+        },
+        {
+            "buffer" : 0,
+            "byteLength" : 192,
+            "byteOffset" : 1536
+        },
+        {
+            "buffer" : 0,
+            "byteLength" : 768,
+            "byteOffset" : 1728
+        },
+        {
+            "buffer" : 0,
+            "byteLength" : 216,
+            "byteOffset" : 2496
+        },
+        {
+            "buffer" : 0,
+            "byteLength" : 320,
+            "byteOffset" : 2712
+        }
+    ],
+    "buffers" : [
+        {
+            "byteLength" : 3032,
+            "uri" : "skeleton.bin"
+        }
+    ]
+}

@@ -19,608 +19,87 @@
 #include "vk_Mesh.h"
 #include "Camera.h"
 
-Camera camera;
+Camera camera {};
 
+struct Entity
+{
+    SkinnedModel model;
+};
+
+std::vector<Entity> entities {};
 
 extern int
 main(int argc, char **argv)
 {
-    SDL_Init(SDL_INIT_EVERYTHING);
-    auto w_flags = (SDL_WINDOW_VULKAN | SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE);
-    gWindow      = SDL_CreateWindow("Vulkan Engine", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, WIDTH, HEIGHT, w_flags);
-
-
-
-
-
-    //
-    // Instance
-    //
-    {
-        uint32_t supported_extension_properties_count;
-        vkEnumerateInstanceExtensionProperties(NULL, &supported_extension_properties_count, NULL);
-        std::vector<VkExtensionProperties> supported_extention_properties(supported_extension_properties_count);
-        vkEnumerateInstanceExtensionProperties(NULL, &supported_extension_properties_count, &supported_extention_properties[0]);
-
-        uint32_t required_extensions_count;
-        SDL_Vulkan_GetInstanceExtensions(gWindow, &required_extensions_count, NULL);
-        // std::vector<char *> required_instance_extensions(required_extensions_count);
-        const char **required_instance_extensions = new const char *[required_extensions_count];
-        SDL_Vulkan_GetInstanceExtensions(gWindow, &required_extensions_count, required_instance_extensions);
-
-
-        uint32_t layers_count;
-        vkEnumerateInstanceLayerProperties(&layers_count, NULL);
-        std::vector<VkLayerProperties> layer_properties(layers_count);
-        vkEnumerateInstanceLayerProperties(&layers_count, &layer_properties[0]);
-
-        // validation layers
-        const char *validation_layers[] = {
-            { "VK_LAYER_KHRONOS_validation" },
-            { "VK_LAYER_KHRONOS_synchronization2" },
-            // { "VK_LAYER_LUNARG_monitor" },
-        };
-
-
-        VkApplicationInfo application_info  = {};
-        application_info.sType              = VK_STRUCTURE_TYPE_APPLICATION_INFO;
-        application_info.pNext              = NULL;
-        application_info.pApplicationName   = "name";
-        application_info.applicationVersion = VK_MAKE_VERSION(0, 1, 0);
-        application_info.pEngineName        = "engine name";
-        application_info.engineVersion      = VK_MAKE_VERSION(0, 1, 0);
-        application_info.apiVersion         = VK_API_VERSION_1_3;
-
-        VkInstanceCreateInfo create_info_instance = {};
-#if _DEBUG
-        VkValidationFeatureEnableEXT enabled_validation_feature[] = {
-            VK_VALIDATION_FEATURE_ENABLE_DEBUG_PRINTF_EXT,
-            // VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_EXT,
-        };
-
-        VkValidationFeaturesEXT validation_features       = {};
-        validation_features.sType                         = VK_STRUCTURE_TYPE_VALIDATION_FEATURES_EXT;
-        validation_features.enabledValidationFeatureCount = ARR_COUNT(enabled_validation_feature);
-        validation_features.pEnabledValidationFeatures    = enabled_validation_feature;
-
-        create_info_instance.pNext               = &validation_features;
-        create_info_instance.enabledLayerCount   = ARR_COUNT(validation_layers);
-        create_info_instance.ppEnabledLayerNames = validation_layers;
-#endif
-        create_info_instance.sType                   = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
-        create_info_instance.flags                   = 0;
-        create_info_instance.pApplicationInfo        = &application_info;
-        create_info_instance.enabledExtensionCount   = required_extensions_count;
-        create_info_instance.ppEnabledExtensionNames = required_instance_extensions;
-        VKCHECK(vkCreateInstance(&create_info_instance, NULL, &gInstance));
-    }
-
-
-
-
-
-    //
-    // Surface
-    //
-    {
-        if (!SDL_Vulkan_CreateSurface(gWindow, gInstance, &gSurface)) {
-            SDL_Log("SDL Failed to create Surface");
-        }
-    }
-
-
-
-
-
-    //
-    // Physical Device selection
-    //
-    {
-        uint32_t physical_device_count = {};
-        VKCHECK(vkEnumeratePhysicalDevices(gInstance, &physical_device_count, NULL));
-        std::vector<VkPhysicalDevice> physical_devices(physical_device_count);
-        VKCHECK(vkEnumeratePhysicalDevices(gInstance, &physical_device_count, &physical_devices[0]));
-
-        std::vector<VkPhysicalDeviceProperties> physical_device_properties(physical_device_count);
-        for (size_t i = 0; i < physical_device_count; i++) {
-            vkGetPhysicalDeviceProperties(physical_devices[i], &physical_device_properties[i]);
-        }
-
-        struct GPU
-        {
-            VkPhysicalDeviceType type;
-            const char          *type_name;
-            const char          *name;
-            uint32_t             index;
-        };
-        std::vector<GPU> available_gpus(physical_device_count);
-
-        uint32_t selected_physical_device_idx;
-        for (size_t i = 0; i < physical_device_count; i++) {
-            auto device_type = physical_device_properties[i].deviceType;
-            auto name        = physical_device_properties[i].deviceName;
-
-            if (device_type == VkPhysicalDeviceType::VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU) {
-                available_gpus[i].type_name = "DISCRETE_GPU";
-                available_gpus[i].index     = i;
-            }
-            if (device_type == VkPhysicalDeviceType::VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU) {
-                available_gpus[i].type_name = "INTEGRATED_GPU";
-                available_gpus[i].index     = i;
-            }
-            if (device_type == VkPhysicalDeviceType::VK_PHYSICAL_DEVICE_TYPE_CPU) {
-                available_gpus[i].type_name = "CPU (APU)";
-                available_gpus[i].index     = i;
-            }
-            if (device_type == VkPhysicalDeviceType::VK_PHYSICAL_DEVICE_TYPE_VIRTUAL_GPU) {
-                available_gpus[i].type_name = "VIRTUAL_GPU";
-                available_gpus[i].index     = i;
-            }
-            if (device_type == VkPhysicalDeviceType::VK_PHYSICAL_DEVICE_TYPE_OTHER) {
-
-                available_gpus[i].type_name = "UNKNOWN";
-                available_gpus[i].index     = i;
-            }
-
-            available_gpus[i].type = device_type;
-            available_gpus[i].name = name;
-        }
-
-#if PROMPT_GPU_SELECTION_AT_STARTUP
-        uint32_t selection = -1;
-        for (size_t i = 0; i < available_gpus.size(); i++) {
-            SDL_Log("%d) (%s) %s", i, available_gpus[i].type_name, available_gpus[i].name);
-        }
-
-        do {
-            SDL_Log("Select desired GPU to continue:");
-            scanf("%d", &selection);
-        } while (selection < 0 || selection > available_gpus.size() - 1);
-
-        selected_physical_device_idx = available_gpus[selection].index;
-
-#else
-        for (size_t i = 0; i < available_gpus.size(); i++) {
-            if (available_gpus[i].type = VkPhysicalDeviceType::VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU) {
-                selected_physical_device_idx = available_gpus[i].index;
-                break;
-            } else if (available_gpus[i].type = VkPhysicalDeviceType::VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU)
-                selected_physical_device_idx = available_gpus[i].index;
-        }
-
-#endif
-        gPhysical_device = physical_devices[selected_physical_device_idx];
-        SDL_Log("Selected GPU:[%s][%s]", available_gpus[selected_physical_device_idx].type_name, available_gpus[selected_physical_device_idx].name);
-
-        if (physical_device_properties[selected_physical_device_idx].apiVersion < VK_API_VERSION_1_3) {
-            SDL_Log("GPU does not support Vulkan 1.3 Profile, consider updating drivers");
-        }
-    }
-
-
-
-
-
-    //
-    // Queues
-    //
-    {
-        uint32_t queue_family_properties_count = 0;
-        vkGetPhysicalDeviceQueueFamilyProperties(gPhysical_device, &queue_family_properties_count, NULL);
-        VkQueueFamilyProperties *queue_family_properties = new VkQueueFamilyProperties[queue_family_properties_count];
-        vkGetPhysicalDeviceQueueFamilyProperties(gPhysical_device, &queue_family_properties_count, queue_family_properties);
-
-        if (queue_family_properties == NULL) {
-            // some error message
-            return 0;
-        }
-
-        VkBool32 *queue_idx_supports_present = new VkBool32[queue_family_properties_count];
-        for (uint32_t i = 0; i < queue_family_properties_count; i++) {
-            vkGetPhysicalDeviceSurfaceSupportKHR(gPhysical_device, i, gSurface, &queue_idx_supports_present[i]);
-        }
-
-        uint32_t graphics_queue_family_idx = UINT32_MAX;
-        uint32_t compute_queue_family_idx  = UINT32_MAX;
-        uint32_t present_queue_family_idx  = UINT32_MAX;
-
-        for (uint32_t i = 0; i < queue_family_properties_count; i++) {
-            if (queue_family_properties[i].queueFlags & VK_QUEUE_GRAPHICS_BIT)
-                if (graphics_queue_family_idx == UINT32_MAX)
-                    graphics_queue_family_idx = i;
-
-            if (queue_idx_supports_present[i] == VK_TRUE) {
-                graphics_queue_family_idx = i;
-                present_queue_family_idx  = i;
-                break;
-            }
-        }
-
-        for (uint32_t i = 0; i < queue_family_properties_count; i++) {
-            if (queue_family_properties[i].queueFlags & VK_QUEUE_COMPUTE_BIT)
-                if (compute_queue_family_idx == UINT32_MAX) {
-                    compute_queue_family_idx = i;
-                    break;
-                }
-        }
-
-        if (present_queue_family_idx == UINT32_MAX) {
-            for (uint32_t i = 0; i < queue_family_properties_count; i++) {
-                if (queue_idx_supports_present[i]) {
-                    present_queue_family_idx = i;
-                    break;
-                }
-            }
-        }
-
-        SDL_Log("Graphics queue family idx: %d\n", graphics_queue_family_idx);
-        SDL_Log("Compute  queue family idx: %d\n", compute_queue_family_idx);
-        SDL_Log("Present  queue family idx: %d\n", present_queue_family_idx);
-
-        if ((graphics_queue_family_idx & compute_queue_family_idx))
-            SDL_Log("Separate Graphics and Compute Queues!\n");
-
-
-        if ((graphics_queue_family_idx == UINT32_MAX) && (present_queue_family_idx == UINT32_MAX)) {
-            // todo(ad): exit on error message
-            SDL_LogError(0, "Failed to find Graphics and Present gQueues");
-            abort();
-        }
-
-        gQueues._seperate_present_queue = (graphics_queue_family_idx != present_queue_family_idx);
-
-        gQueues._graphics_queue_family_idx = graphics_queue_family_idx;
-        gQueues._compute_queue_family_idx  = compute_queue_family_idx;
-        gQueues._present_queue_family_idx  = present_queue_family_idx;
-    }
-
-
-
-
-
-    ///
-    /// Device
-    ///
-    {
-        VkPhysicalDeviceFeatures supported_gpu_features = {};
-        vkGetPhysicalDeviceFeatures(gPhysical_device, &supported_gpu_features);
-
-        // todo(ad): not used right now
-        uint32_t device_properties_count = 0;
-        VKCHECK(vkEnumerateDeviceExtensionProperties(gPhysical_device, NULL, &device_properties_count, NULL));
-        VkExtensionProperties *device_extension_properties = new VkExtensionProperties[device_properties_count];
-        VKCHECK(vkEnumerateDeviceExtensionProperties(gPhysical_device, NULL, &device_properties_count, device_extension_properties));
-
-#if 0
-    SDL_Log("Device Extensions count: %d\n", device_properties_count);
-    for (size_t i = 0; i < device_properties_count; i++) {
-        if (strcmp(device_extension_properties[i].extensionName, VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME) == 0)
-            SDL_Log("%d: %s\n", device_extension_properties[i].specVersion, device_extension_properties[i].extensionName);
-    }
-#endif
-
-        const float queue_priorities[] = {
-            { 1.0 }
-        };
-
-
-        std::vector<VkDeviceQueueCreateInfo> create_info_device_queues = {};
-        VkDeviceQueueCreateInfo              ci_graphics_queue         = {};
-        ci_graphics_queue.sType                                        = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-        ci_graphics_queue.pNext                                        = NULL;
-        ci_graphics_queue.flags                                        = 0;
-        ci_graphics_queue.queueFamilyIndex                             = gQueues._graphics_queue_family_idx;
-        ci_graphics_queue.queueCount                                   = 1;
-        ci_graphics_queue.pQueuePriorities                             = queue_priorities;
-        create_info_device_queues.push_back(ci_graphics_queue);
-
-        VkDeviceQueueCreateInfo ci_compute_queue = {};
-        ci_compute_queue.sType                   = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-        ci_compute_queue.pNext                   = NULL;
-        ci_compute_queue.flags                   = 0;
-        ci_compute_queue.queueFamilyIndex        = gQueues._compute_queue_family_idx;
-        ci_compute_queue.queueCount              = 1;
-        ci_compute_queue.pQueuePriorities        = queue_priorities;
-        create_info_device_queues.push_back(ci_compute_queue);
-
-
-
-
-
-        VkPhysicalDeviceVulkan11Features gpu_vulkan_11_features = {};
-        gpu_vulkan_11_features.sType                            = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES;
-        gpu_vulkan_11_features.shaderDrawParameters             = VK_TRUE;
-
-
-
-        VkPhysicalDeviceSynchronization2Features synchronization2_features = {};
-        synchronization2_features.sType                                    = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SYNCHRONIZATION_2_FEATURES;
-        synchronization2_features.synchronization2                         = VK_TRUE;
-
-        VkPhysicalDeviceRobustness2FeaturesEXT robustness_feature_ext = {};
-        robustness_feature_ext.sType                                  = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ROBUSTNESS_2_FEATURES_EXT;
-        robustness_feature_ext.nullDescriptor                         = VK_TRUE;
-        robustness_feature_ext.pNext                                  = &synchronization2_features;
-
-        VkPhysicalDeviceDynamicRenderingFeaturesKHR dynamic_rendering = {};
-        dynamic_rendering.sType                                       = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES_KHR;
-        dynamic_rendering.dynamicRendering                            = VK_TRUE;
-        dynamic_rendering.pNext                                       = &robustness_feature_ext;
-
-        // gpu_vulkan_11_features.pNext = &robustness_feature_ext;
-        const char *enabled_device_extension_names[] = {
-            VK_KHR_SWAPCHAIN_EXTENSION_NAME,
-            // VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME,
-            // VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME, // core in v1.3
-            // VK_KHR_SHADER_NON_SEMANTIC_INFO_EXTENSION_NAME,
-        };
-
-        VkDeviceCreateInfo create_info_device      = {};
-        create_info_device.sType                   = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-        create_info_device.pNext                   = &dynamic_rendering; // seens to be required even if it's core in 1.3
-        create_info_device.flags                   = 0;
-        create_info_device.queueCreateInfoCount    = 1;
-        create_info_device.pQueueCreateInfos       = &create_info_device_queues[0];
-        create_info_device.enabledExtensionCount   = ARR_COUNT(enabled_device_extension_names);
-        create_info_device.ppEnabledExtensionNames = enabled_device_extension_names;
-        create_info_device.pEnabledFeatures        = &supported_gpu_features;
-
-        VKCHECK(vkCreateDevice(gPhysical_device, &create_info_device, NULL, &gDevice));
-
-        if (gQueues._seperate_present_queue) {
-            vkGetDeviceQueue(gDevice, gQueues._present_queue_family_idx, 0, &gQueues._present);
-        } else {
-            vkGetDeviceQueue(gDevice, gQueues._graphics_queue_family_idx, 0, &gQueues._graphics);
-            gQueues._present = gQueues._graphics;
-        }
-        vkGetDeviceQueue(gDevice, gQueues._compute_queue_family_idx, 0, &gQueues._compute);
-    }
-
-
-
-
-    //
-    // VMA allocator
-    //
-    {
-        VmaAllocatorCreateInfo vma_allocator_ci {};
-        vma_allocator_ci.instance       = gInstance;
-        vma_allocator_ci.device         = gDevice;
-        vma_allocator_ci.physicalDevice = gPhysical_device;
-
-        vmaCreateAllocator(&vma_allocator_ci, &gAllocator);
-    }
-
-
-
-
-
-    //
-    // Swapchain
-    //
-    {
-        gSwapchain.Create(gDevice, gPhysical_device, gSurface, VK_NULL_HANDLE);
-        gFrames.resize(gSwapchain._image_count);
-
-        SDL_Log("HELLOOOOOO VULKAN!");
-    }
-
-
-
-
-    //
-    // Command Pools
-    //
-    {
-        VkCommandPoolCreateInfo command_pool_ci = {};
-        command_pool_ci.sType                   = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-        command_pool_ci.flags                   = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
-        command_pool_ci.queueFamilyIndex        = gQueues._graphics_queue_family_idx;
-        VKCHECK(vkCreateCommandPool(gDevice, &command_pool_ci, NULL, &gGraphics_command_pool));
-
-
-
-        //
-        // Per frame objects
-        //
-        for (size_t i = 0; i < gSwapchain._image_count; i++) {
-            VkCommandBufferAllocateInfo command_buffer_allocate_info = {};
-            command_buffer_allocate_info.sType                       = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-            command_buffer_allocate_info.commandPool                 = gGraphics_command_pool;
-            command_buffer_allocate_info.level                       = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-            command_buffer_allocate_info.commandBufferCount          = 1;
-            VKCHECK(vkAllocateCommandBuffers(gDevice, &command_buffer_allocate_info, &gFrames[i].graphics_command_buffer));
-
-            VkFenceCreateInfo fence_ci = {};
-            fence_ci.sType             = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-            fence_ci.flags             = VK_FENCE_CREATE_SIGNALED_BIT;
-            VKCHECK(vkCreateFence(gDevice, &fence_ci, NULL, &gFrames[i].render_fence));
-
-            VkSemaphoreCreateInfo semaphoreCreateInfo = {};
-            semaphoreCreateInfo.sType                 = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
-            semaphoreCreateInfo.pNext                 = NULL;
-            semaphoreCreateInfo.flags                 = 0;
-
-            VKCHECK(vkCreateSemaphore(gDevice, &semaphoreCreateInfo, NULL, &gFrames[i].present_semaphore));
-            VKCHECK(vkCreateSemaphore(gDevice, &semaphoreCreateInfo, NULL, &gFrames[i].render_semaphore));
-        }
-    }
-
-
-
-    {
-        VkImageMemoryBarrier2 image_memory_barrier_before_rendering = {};
-        image_memory_barrier_before_rendering.sType                 = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
-
-        image_memory_barrier_before_rendering.srcStageMask = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
-        // image_memory_barrier_before_rendering.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-
-        image_memory_barrier_before_rendering.dstStageMask  = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
-        image_memory_barrier_before_rendering.dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-        image_memory_barrier_before_rendering.oldLayout     = VK_IMAGE_LAYOUT_UNDEFINED;
-        image_memory_barrier_before_rendering.newLayout     = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL;
-
-        image_memory_barrier_before_rendering.image                       = gSwapchain._depth_image.handle;
-        image_memory_barrier_before_rendering.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
-        image_memory_barrier_before_rendering.subresourceRange.layerCount = 1;
-        image_memory_barrier_before_rendering.subresourceRange.levelCount = 1;
- 
-        VkDependencyInfo dependency_info        = {};
-        dependency_info.sType                   = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
-        dependency_info.imageMemoryBarrierCount = 1;
-        dependency_info.pImageMemoryBarriers    = &image_memory_barrier_before_rendering;
-
-        VkCommandBufferBeginInfo begin_info = {};
-        begin_info.sType                    = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-        begin_info.flags                    = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-        VKCHECK(vkBeginCommandBuffer(gFrames[0].graphics_command_buffer, &begin_info));
-        vkCmdPipelineBarrier2(gFrames[0].graphics_command_buffer, &dependency_info);
-        VKCHECK(vkEndCommandBuffer(gFrames[0].graphics_command_buffer));
-
-
-        VkCommandBufferSubmitInfo command_buffer_submit_info = {};
-        command_buffer_submit_info.sType                     = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO;
-        command_buffer_submit_info.pNext                     = NULL;
-        command_buffer_submit_info.commandBuffer             = gFrames[0].graphics_command_buffer;
-
-        VkSubmitInfo2 submit_info = {};
-        submit_info.sType         = VK_STRUCTURE_TYPE_SUBMIT_INFO_2;
-        submit_info.flags;
-        submit_info.commandBufferInfoCount = 1;
-        submit_info.pCommandBufferInfos    = &command_buffer_submit_info;
-
-        VKCHECK(vkQueueSubmit2(gQueues._graphics, 1, &submit_info, NULL));
-        vkDeviceWaitIdle(gDevice);
-    }
-
-
-    //
-    // Descriptor pool
-    //
-    {
-        // we are creating a pool that can potentially hold 16 descriptor sets that hold swapchain.image_count number of uniform buffer descriptors
-        VkDescriptorPool     descriptor_pool;
-        VkDescriptorPoolSize descriptor_pool_sizes[1] {};
-        descriptor_pool_sizes[0].type            = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-        descriptor_pool_sizes[0].descriptorCount = gSwapchain._image_count; // total amount of a given descriptor type accross all sets
-
-        VkDescriptorPoolCreateInfo descriptor_pool_ci {};
-        descriptor_pool_ci.sType         = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-        descriptor_pool_ci.flags         = 0;
-        descriptor_pool_ci.maxSets       = gSwapchain._image_count;
-        descriptor_pool_ci.poolSizeCount = ARR_COUNT(descriptor_pool_sizes); // 1 PoolSize = TYPE count of descriptors
-        descriptor_pool_ci.pPoolSizes    = descriptor_pool_sizes;
-        VKCHECK(vkCreateDescriptorPool(gDevice, &descriptor_pool_ci, NULL, &descriptor_pool));
-
-
-        //
-        // Descriptor set layouts
-        //
-
-        // set 0 bindings
-        // the layout for the set at binding 0 that will reference a MVP uniform blok
-        std::vector<VkDescriptorSetLayoutBinding> set_layout_bindings(1);
-        set_layout_bindings[0].binding         = 0;
-        set_layout_bindings[0].descriptorCount = 1; // 1 instance of MVP block for this binding
-        set_layout_bindings[0].descriptorType  = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-        set_layout_bindings[0].stageFlags      = VK_SHADER_STAGE_VERTEX_BIT;
-
-        // set 0
-        gDescriptor_set_layouts.resize(gSwapchain._image_count);
-        gDescriptor_sets.resize(gSwapchain._image_count);
-
-
-        for (size_t i = 0; i < gSwapchain._image_count; i++) {
-            VkDescriptorSetLayoutCreateInfo set_layouts_ci {};
-            set_layouts_ci.sType        = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-            set_layouts_ci.pNext        = NULL;
-            set_layouts_ci.flags        = 0;
-            set_layouts_ci.bindingCount = set_layout_bindings.size();
-            set_layouts_ci.pBindings    = &set_layout_bindings[0];
-
-            // we need <frame_count> descriptor sets that each reference 1 MVP uniform block for each frame in flight
-            VKCHECK(vkCreateDescriptorSetLayout(gDevice, &set_layouts_ci, NULL, &gDescriptor_set_layouts[i]));
-        }
-
-
-        VkDescriptorSetAllocateInfo descriptor_set_alloc_info {};
-        descriptor_set_alloc_info.sType              = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-        descriptor_set_alloc_info.descriptorPool     = descriptor_pool;
-        descriptor_set_alloc_info.descriptorSetCount = gDescriptor_sets.size();
-        descriptor_set_alloc_info.pSetLayouts        = &gDescriptor_set_layouts[0];
-        VKCHECK(vkAllocateDescriptorSets(gDevice, &descriptor_set_alloc_info, &gDescriptor_sets[0]));
-    }
-
-
-
-
-
-    //
-    // Shader uniforms & Descriptor set updates/writes
-    //
-    std::vector<void *> mapped_ubo_ptrs(gSwapchain._image_count);
-    {
-
-        for (size_t i = 0; i < gSwapchain._image_count; i++) {
-
-            {
-                CreateBuffer(&gFrames[i].UBO.handle, sizeof(glm::mat4) * 3, &gFrames[i].UBO.vma_allocation,
-                    VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-                    VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT,
-                    VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE);
-
-                vmaMapMemory(gAllocator, gFrames[i].UBO.vma_allocation, &mapped_ubo_ptrs[i]);
-            }
-
-            {
-                VkDescriptorBufferInfo buffer_info {};
-                buffer_info.buffer = gFrames[i].UBO.handle;
-                buffer_info.offset = 0;
-                buffer_info.range  = VK_WHOLE_SIZE;
-
-                VkWriteDescriptorSet descriptor_writes {};
-                descriptor_writes.sType      = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-                descriptor_writes.dstSet     = gDescriptor_sets[i];
-                descriptor_writes.dstBinding = 0;
-                descriptor_writes.dstArrayElement;
-                descriptor_writes.descriptorCount = 1;
-                descriptor_writes.descriptorType  = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-                descriptor_writes.pImageInfo;
-                descriptor_writes.pBufferInfo = &buffer_info;
-                descriptor_writes.pTexelBufferView;
-                vkUpdateDescriptorSets(gDevice, 1, &descriptor_writes, 0, NULL);
-            }
-        }
-    }
-
-
-
-    //
-    // Pipelines
-    //
-    CreateGraphicsPipeline(gDevice, &gDefault_graphics_pipeline);
-
+    VulkanInit();
 
     camera.CameraCreate({ 0, 20, 44 }, 45.f, WIDTH / (float)HEIGHT, .8f, 4000.f);
     camera._pitch  = -20;
     gActive_camera = &camera;
 
 
-    glm::vec3 translation = { 0, 0, 0 };
-    glm::vec3 rotation    = { 0, 0, 0 };
-    glm::vec3 scale       = { 10, 10, 10 };
 
-    SkinnedModel skinned_model;
-    skinned_model.Create("assets/warrior/warrior.gltf");
-    glm::mat4 model = glm::mat4(1);
+    entities.resize(1024 * 4);
+    for (size_t i = 0; i < entities.size(); i++) {
+        static float z = 0;
+        static float x = 0;
 
-    model = glm::translate(model, translation)
-        * glm::rotate(model, (glm::radians(rotation.z)), glm::vec3(0, 0, 1))
-        * glm::rotate(model, (glm::radians(rotation.y)), glm::vec3(0, 1, 0))
-        * glm::rotate(model, (glm::radians(rotation.x)), glm::vec3(1, 0, 0))
-        * glm::scale(model, glm::vec3(scale));
+        int   distanceFactor      = 24;
+        int   max_entities_on_row = 64;
+        float startingOffset      = 0.f;
+
+        if (i > 0) x++;
+        if (x == max_entities_on_row) {
+            x = 0;
+            z++;
+        }
+
+        if (i == 0) {
+            entities[i].model.Create("assets/warrior/warrior.gltf"); // fixme: if for some reason this fails to load
+            // then the following line will crash
+            entities[i].model._transform.translation = { startingOffset + x * distanceFactor, 0.f, startingOffset + z * distanceFactor };
+            entities[i].model._transform.rotation    = glm::quat({ 0, 0, 0 });
+            entities[i].model._transform.scale       = glm::vec3(10.0f);
+            // entities[i].model._current_animation     = &entities[i].model._animations[0];
+            // entities[i].model._should_play_animation = true;
+        } else {
+            // entities[i].model.Create("assets/warrior/warrior.gltf"); // fixme: if for some reason this fails to load
+            // then the following line will crash
+            entities[i].model._meshes                  = entities[0].model._meshes;
+            entities[i].model._mesh_data               = entities[0].model._mesh_data;
+            entities[i].model.vertex_buffer            = entities[0].model.vertex_buffer;
+            entities[i].model.vertex_buffer_allocation = entities[0].model.vertex_buffer_allocation;
+
+            entities[i].model._transform.translation = { startingOffset + x * distanceFactor, 0.f, startingOffset + z * distanceFactor };
+            entities[i].model._transform.rotation    = glm::quat({ 0, 0, 0 });
+            entities[i].model._transform.scale       = glm::vec3(10.0f);
+            // entities[i].model._current_animation     = &entities[i].model._animations[0];
+            // entities[i].model._should_play_animation = true;
+        }
 
 
+        // else if (i == 1) {
+        //     entities[i].model.Create("assets/capoera.gltf"); // fixme: if for some reason this fails to load
+        //     // then the following line will crash
+        //     // entities[i].model._meshes[0]._materials[0] = gMaterials["default"];
+        //     entities[i].model._transform.translation = { startingOffset + x * distanceFactor, 0.f, startingOffset + z * distanceFactor };
+        //     entities[i].model._transform.rotation    = glm::quat({ 0, 0, 0 });
+        //     entities[i].model._transform.scale       = glm::vec3(.1f);
+        //     // entities[i].model._current_animation       = &entities[i].model._animations[i % 2];
+        //     // entities[i].model._should_play_animation   = true;
+        // } else if (i == 2) {
+        //     entities[i].model.Create("assets/chibi_02_ex.gltf"); // fixme: if for some reason this fails to load
+        //     // then the following line will crash
+        //     entities[i].model._transform.translation = { startingOffset + x * distanceFactor, 0.f, startingOffset + z * distanceFactor };
+        //     entities[i].model._transform.rotation    = glm::quat({ 0, 0, 0 });
+        //     entities[i].model._transform.scale       = glm::vec3(10.f);
+        //     // entities[i].model._current_animation     = &entities[i].model._animations[0];
+        //     // entities[i].model._should_play_animation = true;
+        // }
+
+
+        // ComputeLocalJointTransforms((cgltf_data *)entities[i].model._meshData.ptr);
+    }
 
 
     bool     bQuit            = false;
@@ -712,16 +191,15 @@ main(int argc, char **argv)
         if (window_minimized) continue;
 
 
-
         gActive_camera->CameraUpdate(&input, dt);
+        gActive_camera->_aspect = WIDTH / (float)HEIGHT;
+
 
         VkResult result;
 
         VkCommandBuffer graphics_cmd_buffer = gFrames[frame_in_flight].graphics_command_buffer;
-        // todo: semaphore & gFrames
 
         {
-            // wait for the gFrames[frame_in_flight].render_fence to be unsignaled by [who?] before acquiring
             VKCHECK(vkWaitForFences(gDevice, 1, &gFrames[frame_in_flight].render_fence, VK_TRUE, SECONDS(1)));
             VKCHECK(vkResetFences(gDevice, 1, &gFrames[frame_in_flight].render_fence));
             VKCHECK(result = vkAcquireNextImageKHR(gDevice, gSwapchain._handle, SECONDS(1), 0, gFrames[frame_in_flight].render_fence, &gFrames[frame_in_flight].image_idx));
@@ -731,46 +209,12 @@ main(int argc, char **argv)
         }
 
         {
-            // VKCHECK(vkResetFences(gDevice, 1, &gFrames[frame_in_flight].render_fence));
             VKCHECK(vkResetCommandBuffer(graphics_cmd_buffer, 0));
 
             VkCommandBufferBeginInfo begin_info = {};
             begin_info.sType                    = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
             begin_info.flags                    = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
             VKCHECK(vkBeginCommandBuffer(graphics_cmd_buffer, &begin_info));
-
-
-
-
-
-            //
-            //  Bindings
-            //
-
-            UBO_data.projection = gActive_camera->_projection;
-            UBO_data.view       = gActive_camera->_view;
-            UBO_data.model      = model;
-            UBO_data.projection[1][1] *= -1;
-
-
-            memcpy(mapped_ubo_ptrs[frame_in_flight], &UBO_data, sizeof(UBOData));
-
-            vkCmdBindDescriptorSets(graphics_cmd_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, gDefault_graphics_pipeline_layout, 0, 1, &gDescriptor_sets[frame_in_flight], 0, NULL);
-            vkCmdBindPipeline(graphics_cmd_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, gDefault_graphics_pipeline);
-
-            VkViewport viewport {};
-            viewport.minDepth = 0;
-            viewport.maxDepth = 1;
-            viewport.width    = (float)WIDTH;
-            viewport.height   = (float)HEIGHT;
-
-            VkRect2D scissor {};
-            scissor.extent.width  = WIDTH;
-            scissor.extent.height = HEIGHT;
-
-
-            vkCmdSetViewport(graphics_cmd_buffer, 0, 1, &viewport);
-            vkCmdSetScissor(graphics_cmd_buffer, 0, 1, &scissor);
 
 
 
@@ -805,13 +249,11 @@ main(int argc, char **argv)
 
 
 
-            ////////////////////////////////////////////
-            // Rendering
-            //
+
 
             {
-                VkClearValue color_clear_value = {};
-                color_clear_value.color        = { 0.f, 1.f, 0.f, 1.f };
+                VkClearValue clear_values[2] = {};
+                clear_values[0].color        = { .5f, .3f, .5f, 1.f };
 
                 VkRenderingAttachmentInfo color_attachment_info = {};
                 color_attachment_info.sType                     = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
@@ -819,11 +261,9 @@ main(int argc, char **argv)
                 color_attachment_info.imageLayout               = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL_KHR;
                 color_attachment_info.loadOp                    = VK_ATTACHMENT_LOAD_OP_CLEAR;
                 color_attachment_info.storeOp                   = VK_ATTACHMENT_STORE_OP_STORE;
-                color_attachment_info.clearValue                = color_clear_value;
+                color_attachment_info.clearValue                = clear_values[0];
 
-
-                VkClearValue depth_clear_value {};
-                depth_clear_value.depthStencil.depth = { 1 };
+                clear_values[1].depthStencil.depth = { 1.f };
 
                 VkRenderingAttachmentInfo depth_attachment_info = {};
                 depth_attachment_info.sType                     = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
@@ -831,7 +271,7 @@ main(int argc, char **argv)
                 depth_attachment_info.imageLayout               = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL_KHR;
                 depth_attachment_info.loadOp                    = VK_ATTACHMENT_LOAD_OP_CLEAR;
                 depth_attachment_info.storeOp                   = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-                depth_attachment_info.clearValue                = depth_clear_value;
+                depth_attachment_info.clearValue                = clear_values[1];
 
                 VkRenderingInfo rendering_info      = {};
                 rendering_info.sType                = VK_STRUCTURE_TYPE_RENDERING_INFO;
@@ -841,16 +281,68 @@ main(int argc, char **argv)
                 rendering_info.pColorAttachments    = &color_attachment_info;
                 rendering_info.pDepthAttachment     = &depth_attachment_info;
                 rendering_info.pStencilAttachment; // todo
+                vkCmdBeginRendering(graphics_cmd_buffer, &rendering_info);
 
+
+
+
+
+                ////////////////////////////////////////////
+                // Rendering
+                //
                 {
-                    vkCmdBeginRendering(graphics_cmd_buffer, &rendering_info);
+                    //
+                    //  Bindings
+                    //
+                    vkCmdBindPipeline(graphics_cmd_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, gDefault_graphics_pipeline);
+                    vkCmdBindDescriptorSets(graphics_cmd_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, gDefault_graphics_pipeline_layout, 0, 1, &gDescriptor_sets[frame_in_flight], 0, NULL);
 
-                    skinned_model.Draw(graphics_cmd_buffer);
+                    UBO_data.projection = gActive_camera->_projection;
+                    UBO_data.view       = gActive_camera->_view;
+                    UBO_data.projection[1][1] *= -1;
+                    memcpy(mapped_ubo_ptrs[frame_in_flight], &UBO_data, sizeof(UBOData));
 
-                    vkCmdEndRendering(graphics_cmd_buffer);
+
+                    VkViewport viewport {};
+                    viewport.minDepth = 0;
+                    viewport.maxDepth = 1;
+                    viewport.width    = (float)WIDTH;
+                    viewport.height   = (float)HEIGHT;
+
+                    VkRect2D scissor {};
+                    scissor.extent.width  = WIDTH;
+                    scissor.extent.height = HEIGHT;
+
+                    vkCmdSetViewport(graphics_cmd_buffer, 0, 1, &viewport);
+                    vkCmdSetScissor(graphics_cmd_buffer, 0, 1, &scissor);
+
+
+                    for (size_t i = 0; i < entities.size(); i++) {
+                        // entities[i].model.AnimationUpdate(dt);
+
+                        glm::mat4 model = glm::mat4(1);
+
+                        model = glm::translate(model, entities[i].model._transform.translation)
+                            * glm::rotate(model, (glm::radians(entities[i].model._transform.rotation.z)), glm::vec3(0, 0, 1))
+                            * glm::rotate(model, (glm::radians(entities[i].model._transform.rotation.y)), glm::vec3(0, 1, 0))
+                            * glm::rotate(model, (glm::radians(entities[i].model._transform.rotation.x)), glm::vec3(1, 0, 0))
+                            * glm::scale(model, glm::vec3(entities[i].model._transform.scale));
+
+
+                        PushConstants constants;
+                        constants.model = model;
+                        vkCmdPushConstants(graphics_cmd_buffer, gDefault_graphics_pipeline_layout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(PushConstants), &constants);
+
+                        // vkCmdDrawIndexedIndirect()
+
+                        entities[i].model.Draw(graphics_cmd_buffer);
+                    }
                 }
-            }
+                //////////////////////////////////////////////
 
+
+                vkCmdEndRendering(graphics_cmd_buffer);
+            }
 
 
 

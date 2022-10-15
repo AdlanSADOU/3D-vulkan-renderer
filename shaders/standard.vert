@@ -3,22 +3,24 @@
 #extension GL_EXT_scalar_block_layout : require
 
 layout (location = 0) in vec3 POSITION;
-layout (location = 1) in vec3 NORMALS;
+layout (location = 1) in vec3 NORMAL;
 
 layout(binding = 0) uniform UniformBufferObject {
     mat4 projection;
     mat4 view;
-    mat4 model;
 } ubo;
 
+layout(push_constant) uniform PushConstants {
+    mat4 model;
+} constants;
+
 //VS_OUT
-layout (location = 0) out vec4 v_out_color;
+layout (location = 0) out vec3 v_out_NORMAL;
 
 void main()
 {
-    gl_Position = ubo.projection * ubo.view * ubo.model * vec4(POSITION, 1);
+    gl_Position = ubo.projection * ubo.view * constants.model * vec4(POSITION, 1);
 
-    v_out_color = vec4(NORMALS, 1);
-
-    // debugPrintfEXT("POS(%f, %f, %f) COL(%f, %f, %f)\n", POSITION.x, POSITION.y, POSITION.z, COLOR.x, COLOR.y, COLOR.z);
+    // v_out_NORMAL =  vec4(ubo.projection*vec4(NORMAL,1)).xyz;
+    v_out_NORMAL =  NORMAL;
 }
