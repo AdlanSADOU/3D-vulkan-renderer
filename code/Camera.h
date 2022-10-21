@@ -18,7 +18,7 @@ struct Camera
     float     _aspect      = {};
     float     _near        = {};
     float     _far         = {};
-    float     _speed       = 120.f;
+    float     _speed       = 60.f;
     float     _sensitivity = .046f;
 
 

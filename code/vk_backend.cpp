@@ -24,28 +24,45 @@ Camera camera {};
 struct Entity
 {
     SkinnedModel model;
+    Transform    _transform;
+
+    uint32_t draw_data_idx;
 };
 
 std::vector<Entity> entities {};
+
 
 extern int
 main(int argc, char **argv)
 {
     VulkanInit();
 
+    ///////////////////// Chantier
+
+    // DrawDataSSBO uniform buffer
+    // model matrix
+    //
+
+
+
+
+
+    ///////////////////
+
     camera.CameraCreate({ 0, 20, 44 }, 45.f, WIDTH / (float)HEIGHT, .8f, 4000.f);
     camera._pitch  = -20;
     gActive_camera = &camera;
 
+    Texture warrior_test_texture;
+    warrior_test_texture.Create("assets/warrior/axe_DIF2.png");
 
-
-    entities.resize(1024 * 4);
+    entities.resize(32);
     for (size_t i = 0; i < entities.size(); i++) {
         static float z = 0;
         static float x = 0;
 
         int   distanceFactor      = 24;
-        int   max_entities_on_row = 64;
+        int   max_entities_on_row = 8;
         float startingOffset      = 0.f;
 
         if (i > 0) x++;
@@ -54,12 +71,15 @@ main(int argc, char **argv)
             z++;
         }
 
+
         if (i == 0) {
             entities[i].model.Create("assets/warrior/warrior.gltf"); // fixme: if for some reason this fails to load
             // then the following line will crash
-            entities[i].model._transform.translation = { startingOffset + x * distanceFactor, 0.f, startingOffset + z * distanceFactor };
-            entities[i].model._transform.rotation    = glm::quat({ 0, 0, 0 });
-            entities[i].model._transform.scale       = glm::vec3(10.0f);
+            entities[i]._transform.translation = { startingOffset + x * distanceFactor, 0.f, startingOffset + z * distanceFactor };
+            entities[i]._transform.rotation    = glm::quat({ 0, 0, 0 });
+            entities[i]._transform.scale       = glm::vec3(10.0f);
+            entities[i].draw_data_idx          = i;
+
             // entities[i].model._current_animation     = &entities[i].model._animations[0];
             // entities[i].model._should_play_animation = true;
         } else {
@@ -70,29 +90,33 @@ main(int argc, char **argv)
             entities[i].model.vertex_buffer            = entities[0].model.vertex_buffer;
             entities[i].model.vertex_buffer_allocation = entities[0].model.vertex_buffer_allocation;
 
-            entities[i].model._transform.translation = { startingOffset + x * distanceFactor, 0.f, startingOffset + z * distanceFactor };
-            entities[i].model._transform.rotation    = glm::quat({ 0, 0, 0 });
-            entities[i].model._transform.scale       = glm::vec3(10.0f);
+            entities[i]._transform.translation = { startingOffset + x * distanceFactor, 0.f, startingOffset + z * distanceFactor };
+            entities[i]._transform.rotation    = glm::quat({ 0, 0, 0 });
+            entities[i]._transform.scale       = glm::vec3(10.0f);
+            entities[i].draw_data_idx          = i;
             // entities[i].model._current_animation     = &entities[i].model._animations[0];
             // entities[i].model._should_play_animation = true;
         }
 
+        for (size_t i = 0; i < entities[i].model._meshes.size(); i++) {
+            entities[i].model._meshes[i].material_data.base_color_texture_idx = warrior_test_texture.id;
+        }
 
         // else if (i == 1) {
         //     entities[i].model.Create("assets/capoera.gltf"); // fixme: if for some reason this fails to load
         //     // then the following line will crash
         //     // entities[i].model._meshes[0]._materials[0] = gMaterials["default"];
-        //     entities[i].model._transform.translation = { startingOffset + x * distanceFactor, 0.f, startingOffset + z * distanceFactor };
-        //     entities[i].model._transform.rotation    = glm::quat({ 0, 0, 0 });
-        //     entities[i].model._transform.scale       = glm::vec3(.1f);
+        //     entities[i]._transform.translation = { startingOffset + x * distanceFactor, 0.f, startingOffset + z * distanceFactor };
+        //     entities[i]._transform.rotation    = glm::quat({ 0, 0, 0 });
+        //     entities[i]._transform.scale       = glm::vec3(.1f);
         //     // entities[i].model._current_animation       = &entities[i].model._animations[i % 2];
         //     // entities[i].model._should_play_animation   = true;
         // } else if (i == 2) {
         //     entities[i].model.Create("assets/chibi_02_ex.gltf"); // fixme: if for some reason this fails to load
         //     // then the following line will crash
-        //     entities[i].model._transform.translation = { startingOffset + x * distanceFactor, 0.f, startingOffset + z * distanceFactor };
-        //     entities[i].model._transform.rotation    = glm::quat({ 0, 0, 0 });
-        //     entities[i].model._transform.scale       = glm::vec3(10.f);
+        //     entities[i]._transform.translation = { startingOffset + x * distanceFactor, 0.f, startingOffset + z * distanceFactor };
+        //     entities[i]._transform.rotation    = glm::quat({ 0, 0, 0 });
+        //     entities[i]._transform.scale       = glm::vec3(10.f);
         //     // entities[i].model._current_animation     = &entities[i].model._animations[0];
         //     // entities[i].model._should_play_animation = true;
         // }
@@ -294,14 +318,17 @@ main(int argc, char **argv)
                     //
                     //  Bindings
                     //
+
                     vkCmdBindPipeline(graphics_cmd_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, gDefault_graphics_pipeline);
-                    vkCmdBindDescriptorSets(graphics_cmd_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, gDefault_graphics_pipeline_layout, 0, 1, &gDescriptor_sets[frame_in_flight], 0, NULL);
+                    vkCmdBindDescriptorSets(graphics_cmd_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, gDefault_graphics_pipeline_layout, 0, 1, &gView_projection_sets[frame_in_flight], 0, NULL);
+                    vkCmdBindDescriptorSets(graphics_cmd_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, gDefault_graphics_pipeline_layout, 1, 1, &gDraw_data_sets[frame_in_flight], 0, NULL);
+                    vkCmdBindDescriptorSets(graphics_cmd_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, gDefault_graphics_pipeline_layout, 2, 1, &gMaterial_data_sets[frame_in_flight], 0, NULL);
+                    vkCmdBindDescriptorSets(graphics_cmd_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, gDefault_graphics_pipeline_layout, 3, 1, &gBindless_textures_set, 0, NULL);
 
-                    UBO_data.projection = gActive_camera->_projection;
-                    UBO_data.view       = gActive_camera->_view;
-                    UBO_data.projection[1][1] *= -1;
-                    memcpy(mapped_ubo_ptrs[frame_in_flight], &UBO_data, sizeof(UBOData));
 
+                    ((GlobalUniforms *)mapped_view_proj_ptrs[frame_in_flight])->projection = gActive_camera->_projection;
+                    ((GlobalUniforms *)mapped_view_proj_ptrs[frame_in_flight])->view       = gActive_camera->_view;
+                    ((GlobalUniforms *)mapped_view_proj_ptrs[frame_in_flight])->projection[1][1] *= -1;
 
                     VkViewport viewport {};
                     viewport.minDepth = 0;
@@ -322,20 +349,20 @@ main(int argc, char **argv)
 
                         glm::mat4 model = glm::mat4(1);
 
-                        model = glm::translate(model, entities[i].model._transform.translation)
-                            * glm::rotate(model, (glm::radians(entities[i].model._transform.rotation.z)), glm::vec3(0, 0, 1))
-                            * glm::rotate(model, (glm::radians(entities[i].model._transform.rotation.y)), glm::vec3(0, 1, 0))
-                            * glm::rotate(model, (glm::radians(entities[i].model._transform.rotation.x)), glm::vec3(1, 0, 0))
-                            * glm::scale(model, glm::vec3(entities[i].model._transform.scale));
+                        model = glm::translate(model, entities[i]._transform.translation)
+                            * glm::rotate(model, (glm::radians(entities[i]._transform.rotation.z)), glm::vec3(0, 0, 1))
+                            * glm::rotate(model, (glm::radians(entities[i]._transform.rotation.y)), glm::vec3(0, 1, 0))
+                            * glm::rotate(model, (glm::radians(entities[i]._transform.rotation.x)), glm::vec3(1, 0, 0))
+                            * glm::scale(model, glm::vec3(entities[i]._transform.scale));
 
+
+                        ((DrawDataSSBO *)mapped_draw_data_ptrs[frame_in_flight])[entities[i].draw_data_idx].model = model;
 
                         PushConstants constants;
-                        constants.model = model;
+                        constants.draw_data_idx = entities[i].draw_data_idx;
                         vkCmdPushConstants(graphics_cmd_buffer, gDefault_graphics_pipeline_layout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(PushConstants), &constants);
 
-                        // vkCmdDrawIndexedIndirect()
-
-                        entities[i].model.Draw(graphics_cmd_buffer);
+                        entities[i].model.Draw(graphics_cmd_buffer, frame_in_flight);
                     }
                 }
                 //////////////////////////////////////////////

@@ -1,20 +1,23 @@
 #pragma once
+static uint32_t global_instance_id = 0;
+
 
 struct SkinnedModel
 {
-    Transform                _transform;
-    PushConstants            _push_constants;
 
 
     // todo: we must eventually cache this data to avoid
     // creating GPU buffers for the same Mesh multiple times
     VkBuffer      vertex_buffer;
     VmaAllocation vertex_buffer_allocation;
-    cgltf_data *_mesh_data;
+    cgltf_data   *_mesh_data;
     struct SkinnedMesh
     {
+        uint32_t                  instance_id;
+        MaterialData              material_data {};
         std::vector<VkDeviceSize> positions_offset;
         std::vector<VkDeviceSize> normals_offset;
+        std::vector<VkDeviceSize> texcoord_0_offset;
         std::vector<VkDeviceSize> index_offset;
         std::vector<uint32_t>     index_count;
     };
@@ -22,7 +25,7 @@ struct SkinnedModel
 
 
     void Create(const char *path);
-    void Draw(VkCommandBuffer command_buffer);
+    void Draw(VkCommandBuffer command_buffer, uint32_t frame_in_flight);
 };
 
 void SkinnedModel::Create(const char *path)
@@ -37,7 +40,6 @@ void SkinnedModel::Create(const char *path)
         gSharedMeshes.insert({ std::string(path), (void *)data });
         _mesh_data = data;
     }
-
 
 
 
@@ -70,6 +72,8 @@ void SkinnedModel::Create(const char *path)
     for (size_t mesh_idx = 0; mesh_idx < _mesh_data->meshes_count; mesh_idx++) {
         _meshes[mesh_idx].positions_offset.resize(_mesh_data->meshes[mesh_idx].primitives_count);
         _meshes[mesh_idx].normals_offset.resize(_mesh_data->meshes[mesh_idx].primitives_count);
+        _meshes[mesh_idx].texcoord_0_offset.resize(_mesh_data->meshes[mesh_idx].primitives_count);
+
         _meshes[mesh_idx].index_offset.resize(_mesh_data->meshes[mesh_idx].primitives_count);
         _meshes[mesh_idx].index_count.resize(_mesh_data->meshes[mesh_idx].primitives_count);
 
@@ -84,23 +88,53 @@ void SkinnedModel::Create(const char *path)
                     _meshes[mesh_idx].positions_offset[submesh_idx] = view->offset;
                 if (attrib->type == cgltf_attribute_type_normal)
                     _meshes[mesh_idx].normals_offset[submesh_idx] = view->offset;
+                if (attrib->type == cgltf_attribute_type_texcoord && strcmp(attrib->name, "TEXCOORD_0") == 0)
+                    _meshes[mesh_idx].texcoord_0_offset[submesh_idx] = view->offset;
             }
-
 
             _meshes[mesh_idx].index_offset[submesh_idx] = primitive->indices->buffer_view->offset;
             _meshes[mesh_idx].index_count[submesh_idx]  = primitive->indices->count;
         }
+
+        //
+        //
+        //
+        //
+        //
+        //
+        //////////// NEEEEEEEEED TEXTUREEEEEEEEEEEEEEEEEEEEEEEEEEEES !!!!!!!!!!!!! ! !!!!!!!!! ! ! !! !!!!!!!!!!!
+        //
+        //
+        //
+        //
+        //
+        //
+        //
+
+        glm::vec4 c;
+        if (mesh_idx == 0) c = { 0.8, 0.0, 0.0, 1. };
+        if (mesh_idx == 1) c = { 0.8, 0.0, 0.7, 1. };
+        if (mesh_idx == 2) c = { 0.5, 0.0, 0.8, 1. };
+        if (mesh_idx == 3) c = { 0.0, 0.0, 0.8, 1. };
+        if (mesh_idx == 4) c = { 1.7, 0.9, 1.0, 1. };
+        if (mesh_idx == 5) c = { 1.7, 0.9, 1.0, 1. };
+        if (mesh_idx == 6) c = { 1.7, 0.9, 1.0, 1. };
+        if (mesh_idx == 7) c = { 0.9, 0.8, 0.0, 1. };
+        if (mesh_idx == 8) c = { 0.9, 0.4, 0.0, 1. };
+
+        _meshes[mesh_idx].material_data.color = c;
+        _meshes[mesh_idx].material_data.color = { 1, 1, 1, 1 };
+
+        _meshes[mesh_idx].instance_id = global_instance_id++;
     }
-
-
-
 }
 
-void SkinnedModel::Draw(VkCommandBuffer command_buffer)
+void SkinnedModel::Draw(VkCommandBuffer command_buffer, uint32_t frame_in_flight)
 {
 
 
     VkBuffer buffers[] = {
+        vertex_buffer,
         vertex_buffer,
         vertex_buffer,
     };
@@ -112,13 +146,15 @@ void SkinnedModel::Draw(VkCommandBuffer command_buffer)
             VkDeviceSize offsets[] = {
                 /*POSITIONs*/ _meshes[mesh_idx].positions_offset[submesh_idx],
                 /*COLORs   */ _meshes[mesh_idx].normals_offset[submesh_idx], // offset to the start of the attribute within buffer
+                /*TEXCOORD_0   */ _meshes[mesh_idx].texcoord_0_offset[submesh_idx], // offset to the start of the attribute within buffer
             };
 
-            vkCmdBindVertexBuffers(command_buffer, 0, ARR_COUNT(buffers), buffers, offsets);
+            ((MaterialData *)mapped_material_data_ptrs[frame_in_flight])[_meshes[mesh_idx].instance_id] = _meshes[mesh_idx].material_data;
 
+            vkCmdBindVertexBuffers(command_buffer, 0, ARR_COUNT(buffers), buffers, offsets);
             // vkCmdDrawIndexedIndirect(command_buffer, indirect_commands_buffer, 0, ARR_COUNT(commands), sizeof(commands[0]));
             vkCmdBindIndexBuffer(command_buffer, vertex_buffer, _meshes[mesh_idx].index_offset[submesh_idx], VK_INDEX_TYPE_UINT16);
-            vkCmdDrawIndexed(command_buffer, _meshes[mesh_idx].index_count[submesh_idx], 1, 0, 0, 0);
+            vkCmdDrawIndexed(command_buffer, _meshes[mesh_idx].index_count[submesh_idx], 1, 0, 0, _meshes[mesh_idx].instance_id);
         }
     }
 }
