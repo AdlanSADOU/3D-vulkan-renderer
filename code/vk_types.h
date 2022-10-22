@@ -18,10 +18,10 @@ struct GlobalUniforms
     alignas(16) glm::mat4 view;
 };
 
-#define MAX_RENDER_ENTITIES 1024 * 100
 struct DrawDataSSBO
 {
-    alignas(16) glm::mat4 model;
+    glm::mat4 model;
+    glm::mat4 joint_matrices[64];
 };
 
 struct PushConstants
@@ -31,9 +31,13 @@ struct PushConstants
 
 struct MaterialData
 {
-    alignas(16) glm::vec4 color;
-    uint32_t base_color_texture_idx;
-    uint32_t emissive_texture_idx;
-    uint32_t normal_texture_idx;
-    uint32_t pad;
+    int32_t base_color_texture_idx         = -1;
+    int32_t emissive_texture_idx           = -1;
+    int32_t normal_texture_idx             = -1;
+    int32_t metallic_roughness_texture_idx = -1;
+    float   tiling_x                       = 1.f;
+    float   tiling_y                       = 1.f;
+    float   metallic_factor;
+    float   roughness_factor;
+    alignas(16) glm::vec4 base_color_factor;
 };

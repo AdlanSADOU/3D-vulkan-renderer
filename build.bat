@@ -3,10 +3,11 @@
 if %1 == Debug (
         echo %1
         set COMPILER_FLAGS= -FC -GR- -EHa- -EHsc -EHs -nologo -Zi -Zf -MP -std:c++latest /MTd
-    ) ELSE IF %1 == Release (
+) ELSE IF %1 == Release (
         echo %1
         set COMPILER_FLAGS= -FC -GR- -EHa- -EHsc -EHs -nologo -std:c++latest /MT /O2
-    )
+)
+
 set VENDOR=../vendor
 set VULKAN_SDK=C:\VulkanSDK\1.3.224.1
 
@@ -33,7 +34,7 @@ set LIB_PATHS=%SDL2% %GLEW% %VULKAN%
 
 
 set LINKED_LIBS= shell32.lib OpenGL32.lib glew32.lib SDL2main.lib SDL2.lib vulkan-1.lib
-set LINKER_FLAGS=/link %LIB_PATHS% %LINKED_LIBS% /SUBSYSTEM:CONSOLE /time
+set LINKER_FLAGS=/link %LIB_PATHS% %LINKED_LIBS% /SUBSYSTEM:WINDOWS /INCREMENTAL /TIME+
 
 if not exist build (mkdir build)
 pushd build
@@ -42,3 +43,5 @@ pushd build
 cl %COMPILER_FLAGS% %INCLUDES% /Fe:prog.exe ../code/*.cpp %LINKER_FLAGS%
 
 popd
+
+compileShaders

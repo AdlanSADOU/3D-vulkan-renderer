@@ -1,4 +1,5 @@
-#define VMA_IMPLEMENTATION
+// #define VMA_IMPLEMENTATION
+#define _VMA_PUBLIC_INTERFACE
 
 #if !defined(CGLTF_IMPLEMENTATION)
 #define CGLTF_IMPLEMENTATION
@@ -32,37 +33,22 @@ struct Entity
 std::vector<Entity> entities {};
 
 
-extern int
-main(int argc, char **argv)
+extern int main(int argc, char **argv)
 {
     VulkanInit();
-
-    ///////////////////// Chantier
-
-    // DrawDataSSBO uniform buffer
-    // model matrix
-    //
-
-
-
-
-
-    ///////////////////
 
     camera.CameraCreate({ 0, 20, 44 }, 45.f, WIDTH / (float)HEIGHT, .8f, 4000.f);
     camera._pitch  = -20;
     gActive_camera = &camera;
 
-    Texture warrior_test_texture;
-    warrior_test_texture.Create("assets/warrior/axe_DIF2.png");
 
-    entities.resize(32);
+    entities.resize(2);
     for (size_t i = 0; i < entities.size(); i++) {
         static float z = 0;
         static float x = 0;
 
-        int   distanceFactor      = 24;
-        int   max_entities_on_row = 8;
+        int   distanceFactor      = 22;
+        int   max_entities_on_row = 6;
         float startingOffset      = 0.f;
 
         if (i > 0) x++;
@@ -82,6 +68,16 @@ main(int argc, char **argv)
 
             // entities[i].model._current_animation     = &entities[i].model._animations[0];
             // entities[i].model._should_play_animation = true;
+        } else if (i == 1) {
+            entities[i].model.Create("assets/terrain/terrain.gltf"); // fixme: if for some reason this fails to load
+            // then the following line will crash
+            entities[i]._transform.translation                     = { startingOffset + x * distanceFactor, 0.f, startingOffset + z * distanceFactor };
+            entities[i]._transform.rotation                        = glm::quat({ 0, 0, 0 });
+            entities[i]._transform.scale                           = glm::vec3(1000.0f);
+            entities[i].draw_data_idx                              = i;
+            entities[i].model._meshes[0].material_data[0].tiling_x = 10;
+            entities[i].model._meshes[0].material_data[0].tiling_y = 10;
+
         } else {
             // entities[i].model.Create("assets/warrior/warrior.gltf"); // fixme: if for some reason this fails to load
             // then the following line will crash
@@ -97,29 +93,6 @@ main(int argc, char **argv)
             // entities[i].model._current_animation     = &entities[i].model._animations[0];
             // entities[i].model._should_play_animation = true;
         }
-
-        for (size_t i = 0; i < entities[i].model._meshes.size(); i++) {
-            entities[i].model._meshes[i].material_data.base_color_texture_idx = warrior_test_texture.id;
-        }
-
-        // else if (i == 1) {
-        //     entities[i].model.Create("assets/capoera.gltf"); // fixme: if for some reason this fails to load
-        //     // then the following line will crash
-        //     // entities[i].model._meshes[0]._materials[0] = gMaterials["default"];
-        //     entities[i]._transform.translation = { startingOffset + x * distanceFactor, 0.f, startingOffset + z * distanceFactor };
-        //     entities[i]._transform.rotation    = glm::quat({ 0, 0, 0 });
-        //     entities[i]._transform.scale       = glm::vec3(.1f);
-        //     // entities[i].model._current_animation       = &entities[i].model._animations[i % 2];
-        //     // entities[i].model._should_play_animation   = true;
-        // } else if (i == 2) {
-        //     entities[i].model.Create("assets/chibi_02_ex.gltf"); // fixme: if for some reason this fails to load
-        //     // then the following line will crash
-        //     entities[i]._transform.translation = { startingOffset + x * distanceFactor, 0.f, startingOffset + z * distanceFactor };
-        //     entities[i]._transform.rotation    = glm::quat({ 0, 0, 0 });
-        //     entities[i]._transform.scale       = glm::vec3(10.f);
-        //     // entities[i].model._current_animation     = &entities[i].model._animations[0];
-        //     // entities[i].model._should_play_animation = true;
-        // }
 
 
         // ComputeLocalJointTransforms((cgltf_data *)entities[i].model._meshData.ptr);
@@ -247,31 +220,8 @@ main(int argc, char **argv)
             //
             // Swapchain image layout transition for Rendering
             //
-            {
-                VkImageMemoryBarrier2 image_memory_barrier_before_rendering = {};
-                image_memory_barrier_before_rendering.sType                 = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
-
-                image_memory_barrier_before_rendering.srcStageMask = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
-                // image_memory_barrier_before_rendering.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-
-                image_memory_barrier_before_rendering.dstStageMask  = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-                image_memory_barrier_before_rendering.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-                image_memory_barrier_before_rendering.oldLayout     = VK_IMAGE_LAYOUT_UNDEFINED;
-                image_memory_barrier_before_rendering.newLayout     = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-
-                image_memory_barrier_before_rendering.image                       = gSwapchain._images[gFrames[frame_in_flight].image_idx];
-                image_memory_barrier_before_rendering.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-                image_memory_barrier_before_rendering.subresourceRange.layerCount = 1;
-                image_memory_barrier_before_rendering.subresourceRange.levelCount = 1;
-
-                VkDependencyInfo dependency_info        = {};
-                dependency_info.sType                   = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
-                dependency_info.imageMemoryBarrierCount = 1;
-                dependency_info.pImageMemoryBarriers    = &image_memory_barrier_before_rendering;
-                vkCmdPipelineBarrier2(graphics_cmd_buffer, &dependency_info);
-            }
-
-
+            TransitionImageLayout(graphics_cmd_buffer, gSwapchain._images[gFrames[frame_in_flight].image_idx],
+                VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL, false);
 
 
 
@@ -286,6 +236,10 @@ main(int argc, char **argv)
                 color_attachment_info.loadOp                    = VK_ATTACHMENT_LOAD_OP_CLEAR;
                 color_attachment_info.storeOp                   = VK_ATTACHMENT_STORE_OP_STORE;
                 color_attachment_info.clearValue                = clear_values[0];
+
+                color_attachment_info.resolveImageLayout;
+                color_attachment_info.resolveImageView; // https://vulkan-tutorial.com/Multisampling
+                color_attachment_info.resolveMode;
 
                 clear_values[1].depthStencil.depth = { 1.f };
 
@@ -318,13 +272,12 @@ main(int argc, char **argv)
                     //
                     //  Bindings
                     //
-
                     vkCmdBindPipeline(graphics_cmd_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, gDefault_graphics_pipeline);
+
                     vkCmdBindDescriptorSets(graphics_cmd_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, gDefault_graphics_pipeline_layout, 0, 1, &gView_projection_sets[frame_in_flight], 0, NULL);
                     vkCmdBindDescriptorSets(graphics_cmd_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, gDefault_graphics_pipeline_layout, 1, 1, &gDraw_data_sets[frame_in_flight], 0, NULL);
                     vkCmdBindDescriptorSets(graphics_cmd_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, gDefault_graphics_pipeline_layout, 2, 1, &gMaterial_data_sets[frame_in_flight], 0, NULL);
                     vkCmdBindDescriptorSets(graphics_cmd_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, gDefault_graphics_pipeline_layout, 3, 1, &gBindless_textures_set, 0, NULL);
-
 
                     ((GlobalUniforms *)mapped_view_proj_ptrs[frame_in_flight])->projection = gActive_camera->_projection;
                     ((GlobalUniforms *)mapped_view_proj_ptrs[frame_in_flight])->view       = gActive_camera->_view;
@@ -347,6 +300,7 @@ main(int argc, char **argv)
                     for (size_t i = 0; i < entities.size(); i++) {
                         // entities[i].model.AnimationUpdate(dt);
 
+
                         glm::mat4 model = glm::mat4(1);
 
                         model = glm::translate(model, entities[i]._transform.translation)
@@ -357,6 +311,14 @@ main(int argc, char **argv)
 
 
                         ((DrawDataSSBO *)mapped_draw_data_ptrs[frame_in_flight])[entities[i].draw_data_idx].model = model;
+
+                        if (entities[i].model._current_animation) {
+                            auto joint_matrices = entities[i].model._current_animation->joint_matrices;
+                            for (size_t i = 0; i < joint_matrices.size(); i++) {
+                                ((DrawDataSSBO *)mapped_draw_data_ptrs[frame_in_flight])[entities[i].draw_data_idx].joint_matrices[i] = joint_matrices[i];
+                            }
+                        }
+
 
                         PushConstants constants;
                         constants.draw_data_idx = entities[i].draw_data_idx;

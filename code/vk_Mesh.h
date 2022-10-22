@@ -1,9 +1,29 @@
 #pragma once
+
 static uint32_t global_instance_id = 0;
 
+static void LoadTexture(int32_t *texture_idx, const char *texture_uri, const char *folder_path)
+{
+    std::string full_path;
+    full_path.append(folder_path);
+    full_path.append(texture_uri);
+
+    Texture *t = (Texture *)malloc(sizeof(Texture));
+    t->Create(full_path.c_str());
+    t->name = strdup(texture_uri);
+
+    gTextures.insert({ std::string(texture_uri), t });
+
+    *texture_idx = t->id;
+}
 
 struct SkinnedModel
 {
+    std::vector<Joint>       _joints;
+    std::vector<AnimationV2> _animations_v2;
+    std::vector<Animation>   _animations;
+    Animation               *_current_animation     = {};
+    bool                     _should_play_animation = true;
 
 
     // todo: we must eventually cache this data to avoid
@@ -13,8 +33,8 @@ struct SkinnedModel
     cgltf_data   *_mesh_data;
     struct SkinnedMesh
     {
-        uint32_t                  instance_id;
-        MaterialData              material_data {};
+        uint32_t                  id;
+        std::vector<MaterialData> material_data {};
         std::vector<VkDeviceSize> positions_offset;
         std::vector<VkDeviceSize> normals_offset;
         std::vector<VkDeviceSize> texcoord_0_offset;
@@ -26,6 +46,7 @@ struct SkinnedModel
 
     void Create(const char *path);
     void Draw(VkCommandBuffer command_buffer, uint32_t frame_in_flight);
+    void AnimationUpdate(float dt);
 };
 
 void SkinnedModel::Create(const char *path)
@@ -42,6 +63,8 @@ void SkinnedModel::Create(const char *path)
     }
 
 
+    char *folder_path;
+    GetPathFolder(&folder_path, path, strlen(path));
 
 
     // size_t vertex_buffer_size = sizeof(triangle_vertices) + sizeof(triangle_indices);
@@ -70,14 +93,21 @@ void SkinnedModel::Create(const char *path)
 
 
     for (size_t mesh_idx = 0; mesh_idx < _mesh_data->meshes_count; mesh_idx++) {
-        _meshes[mesh_idx].positions_offset.resize(_mesh_data->meshes[mesh_idx].primitives_count);
-        _meshes[mesh_idx].normals_offset.resize(_mesh_data->meshes[mesh_idx].primitives_count);
-        _meshes[mesh_idx].texcoord_0_offset.resize(_mesh_data->meshes[mesh_idx].primitives_count);
+        auto mesh = &_meshes[mesh_idx];
 
-        _meshes[mesh_idx].index_offset.resize(_mesh_data->meshes[mesh_idx].primitives_count);
-        _meshes[mesh_idx].index_count.resize(_mesh_data->meshes[mesh_idx].primitives_count);
+        mesh->positions_offset.resize(_mesh_data->meshes[mesh_idx].primitives_count);
+        mesh->normals_offset.resize(_mesh_data->meshes[mesh_idx].primitives_count);
+        mesh->texcoord_0_offset.resize(_mesh_data->meshes[mesh_idx].primitives_count);
+
+        mesh->index_offset.resize(_mesh_data->meshes[mesh_idx].primitives_count);
+        mesh->index_count.resize(_mesh_data->meshes[mesh_idx].primitives_count);
+        mesh->material_data.resize(_mesh_data->meshes[mesh_idx].primitives_count);
+
 
         for (size_t submesh_idx = 0; submesh_idx < _mesh_data->meshes[mesh_idx].primitives_count; submesh_idx++) {
+            //
+            // Vertex Attributes
+            //
             cgltf_primitive *primitive = &_mesh_data->meshes[mesh_idx].primitives[submesh_idx];
 
             for (size_t attrib_idx = 0; attrib_idx < primitive->attributes_count; attrib_idx++) {
@@ -85,47 +115,172 @@ void SkinnedModel::Create(const char *path)
                 cgltf_buffer_view *view   = attrib->data->buffer_view;
 
                 if (attrib->type == cgltf_attribute_type_position)
-                    _meshes[mesh_idx].positions_offset[submesh_idx] = view->offset;
+                    mesh->positions_offset[submesh_idx] = view->offset;
                 if (attrib->type == cgltf_attribute_type_normal)
-                    _meshes[mesh_idx].normals_offset[submesh_idx] = view->offset;
+                    mesh->normals_offset[submesh_idx] = view->offset;
                 if (attrib->type == cgltf_attribute_type_texcoord && strcmp(attrib->name, "TEXCOORD_0") == 0)
-                    _meshes[mesh_idx].texcoord_0_offset[submesh_idx] = view->offset;
+                    mesh->texcoord_0_offset[submesh_idx] = view->offset;
             }
 
-            _meshes[mesh_idx].index_offset[submesh_idx] = primitive->indices->buffer_view->offset;
-            _meshes[mesh_idx].index_count[submesh_idx]  = primitive->indices->count;
+            mesh->index_offset[submesh_idx] = primitive->indices->buffer_view->offset;
+            mesh->index_count[submesh_idx]  = primitive->indices->count;
+
+
+            //
+            // Material data
+            //
+            auto material_data = &mesh->material_data[submesh_idx];
+            if (!primitive->material) continue;
+            if (!primitive->material->has_pbr_metallic_roughness) {
+                SDL_Log("Only PBR Metal Roughness is supported: %s", _mesh_data->meshes[mesh_idx].primitives->material->name);
+                continue;
+            }
+
+
+
+            auto base_color_texture         = primitive->material->pbr_metallic_roughness.base_color_texture.texture;
+            auto metallic_roughness_texture = primitive->material->pbr_metallic_roughness.metallic_roughness_texture.texture;
+            auto normal_texture             = primitive->material->normal_texture.texture;
+            auto emissive_texture           = primitive->material->emissive_texture.texture;
+
+            if (base_color_texture) {
+                LoadTexture(&material_data->base_color_texture_idx, base_color_texture->image->uri, folder_path);
+            }
+            if (metallic_roughness_texture) {
+                LoadTexture(&material_data->metallic_roughness_texture_idx, metallic_roughness_texture->image->uri, folder_path);
+            }
+            if (normal_texture) {
+                LoadTexture(&material_data->metallic_roughness_texture_idx, normal_texture->image->uri, folder_path);
+            }
+            if (emissive_texture) {
+                LoadTexture(&material_data->metallic_roughness_texture_idx, emissive_texture->image->uri, folder_path);
+            }
+
+            material_data->base_color_factor.r = primitive->material->pbr_metallic_roughness.base_color_factor[0];
+            material_data->base_color_factor.g = primitive->material->pbr_metallic_roughness.base_color_factor[1];
+            material_data->base_color_factor.b = primitive->material->pbr_metallic_roughness.base_color_factor[2];
+            material_data->base_color_factor.a = primitive->material->pbr_metallic_roughness.base_color_factor[3];
+
+            material_data->metallic_factor  = primitive->material->pbr_metallic_roughness.metallic_factor;
+            material_data->roughness_factor = primitive->material->pbr_metallic_roughness.roughness_factor;
         }
 
-        //
-        //
-        //
-        //
-        //
-        //
-        //////////// NEEEEEEEEED TEXTUREEEEEEEEEEEEEEEEEEEEEEEEEEEES !!!!!!!!!!!!! ! !!!!!!!!! ! ! !! !!!!!!!!!!!
-        //
-        //
-        //
-        //
-        //
-        //
-        //
+        mesh->id = global_instance_id++;
+    }
 
-        glm::vec4 c;
-        if (mesh_idx == 0) c = { 0.8, 0.0, 0.0, 1. };
-        if (mesh_idx == 1) c = { 0.8, 0.0, 0.7, 1. };
-        if (mesh_idx == 2) c = { 0.5, 0.0, 0.8, 1. };
-        if (mesh_idx == 3) c = { 0.0, 0.0, 0.8, 1. };
-        if (mesh_idx == 4) c = { 1.7, 0.9, 1.0, 1. };
-        if (mesh_idx == 5) c = { 1.7, 0.9, 1.0, 1. };
-        if (mesh_idx == 6) c = { 1.7, 0.9, 1.0, 1. };
-        if (mesh_idx == 7) c = { 0.9, 0.8, 0.0, 1. };
-        if (mesh_idx == 8) c = { 0.9, 0.4, 0.0, 1. };
 
-        _meshes[mesh_idx].material_data.color = c;
-        _meshes[mesh_idx].material_data.color = { 1, 1, 1, 1 };
 
-        _meshes[mesh_idx].instance_id = global_instance_id++;
+
+    auto data = _mesh_data; // yayaya
+    // if no animations to handle, we just end here
+    if (!data->animations_count) return;
+
+    _animations.resize(data->animations_count);
+    for (size_t animation_idx = 0; animation_idx < data->animations_count; animation_idx++) {
+        Animation *anim = &_animations[animation_idx];
+
+        _animations[animation_idx] = {
+            .handle   = &data->animations[animation_idx],
+            .name     = data->animations[animation_idx].name,
+            .duration = AnimationGetClipDuration(&data->animations[animation_idx]),
+        };
+        // fixme: delete
+        anim->joint_matrices.resize(data->skins->joints_count);
+
+        for (size_t i = 0; i < anim->joint_matrices.size(); i++) {
+            anim->joint_matrices[i] = glm::mat4(1);
+        }
+    }
+
+
+
+
+    ////// Setup Skeleton: flatten **joints array
+    assert(data->skins_count == 1);
+
+    auto skin     = data->skins;
+    auto joints   = skin->joints;
+    auto rig_node = skin->joints[0]->parent;
+    _joints.resize(skin->joints_count);
+
+    for (size_t joint_idx = 0; joint_idx < skin->joints_count; joint_idx++) {
+        _joints[joint_idx].name = joints[joint_idx]->name; // fixme: animation.joints[i].name will crash if cgltf_data is freed;
+
+        // set inv_bind_matrix
+        uint8_t   *data_buffer       = (uint8_t *)skin->inverse_bind_matrices->buffer_view->buffer->data;
+        auto       offset            = skin->inverse_bind_matrices->buffer_view->offset;
+        glm::mat4 *inv_bind_matrices = ((glm::mat4 *)(data_buffer + offset));
+
+        _joints[joint_idx].inv_bind_matrix = inv_bind_matrices[joint_idx];
+
+        auto current_joint_parent = joints[joint_idx]->parent;
+
+        if (joint_idx == 0 || current_joint_parent == rig_node)
+            _joints[joint_idx].parent = -1;
+        else {
+
+            for (size_t i = 1; i < skin->joints_count; i++) {
+                if (joints[i]->parent == current_joint_parent) {
+                    _joints[joint_idx].parent = i - 1;
+                    break;
+                }
+            }
+        }
+    }
+
+    for (size_t i = 0; i < _animations.size(); i++) {
+        _animations[i]._joints = _joints;
+    }
+
+
+
+
+
+    ////////// todo: figure out if we should actually go this route
+    ////// Process animation samples
+    auto anims_data = data->animations;
+
+    _animations_v2.resize(data->animations_count);
+    for (size_t anim_idx = 0; anim_idx < data->animations_count; anim_idx++) {
+        int sample_count = AnimationMaxSampleCount(anims_data);
+        _animations_v2[anim_idx].samples.resize(skin->joints_count);
+
+        // For each Joint
+        for (size_t joint_idx = 0; joint_idx < skin->joints_count; joint_idx++) {
+
+            // For each Channel
+            for (size_t chan_idx = 0; chan_idx < anims_data->channels_count; chan_idx++) {
+                cgltf_animation_channel *channel = &anims_data->channels[chan_idx];
+
+                // if channel target matches current joint
+                if (channel->target_node == skin->joints[joint_idx]) {
+
+                    cgltf_animation_sampler *sampler = channel->sampler;
+
+                    _animations_v2[anim_idx].samples[joint_idx].target_joint = joint_idx;
+
+                    auto   input_data_ptr    = (uint8_t *)sampler->input->buffer_view->buffer->data;
+                    auto   input_data_offset = sampler->input->buffer_view->offset;
+                    float *timestamps_data   = (float *)(input_data_ptr + input_data_offset);
+
+                    auto   output_data_ptr     = (uint8_t *)sampler->output->buffer_view->buffer->data;
+                    auto   output_data_offset  = sampler->output->buffer_view->offset;
+                    float *transformation_data = (float *)(output_data_ptr + output_data_offset);
+
+                    if (channel->target_path == cgltf_animation_path_type_translation) {
+                        _animations_v2[anim_idx].samples[joint_idx].translation_channel.timestamps   = timestamps_data;
+                        _animations_v2[anim_idx].samples[joint_idx].translation_channel.translations = (glm::vec3 *)transformation_data;
+
+                    } else if (channel->target_path == cgltf_animation_path_type_rotation) {
+                        _animations_v2[anim_idx].samples[joint_idx].rotation_channel.timestamps = timestamps_data;
+                        _animations_v2[anim_idx].samples[joint_idx].rotation_channel.rotations  = (glm::quat *)transformation_data;
+                    } else if (channel->target_path == cgltf_animation_path_type_scale) {
+                        _animations_v2[anim_idx].samples[joint_idx].scale_channel.timestamps = timestamps_data;
+                        _animations_v2[anim_idx].samples[joint_idx].scale_channel.scales     = (glm::vec3 *)transformation_data; // fixme: we might want to scope this to uniform scale only
+                    }
+                }
+            } // End of channels loop for the current joint
+        } // End of Joints loop
     }
 }
 
@@ -137,24 +292,106 @@ void SkinnedModel::Draw(VkCommandBuffer command_buffer, uint32_t frame_in_flight
         vertex_buffer,
         vertex_buffer,
         vertex_buffer,
+        VK_NULL_HANDLE,
+        VK_NULL_HANDLE,
+        VK_NULL_HANDLE,
     };
 
     for (size_t mesh_idx = 0; mesh_idx < _meshes.size(); mesh_idx++) {
 
         for (size_t submesh_idx = 0; submesh_idx < _meshes[mesh_idx].index_count.size(); submesh_idx++) {
 
+            // offset to the start of non-interleaved attributes within same buffer
             VkDeviceSize offsets[] = {
-                /*POSITIONs*/ _meshes[mesh_idx].positions_offset[submesh_idx],
-                /*COLORs   */ _meshes[mesh_idx].normals_offset[submesh_idx], // offset to the start of the attribute within buffer
-                /*TEXCOORD_0   */ _meshes[mesh_idx].texcoord_0_offset[submesh_idx], // offset to the start of the attribute within buffer
+                /*POSITION*/ _meshes[mesh_idx].positions_offset[submesh_idx],
+                /*NORMAL   */ _meshes[mesh_idx].normals_offset[submesh_idx],
+                /*TEXCOORD_0   */ _meshes[mesh_idx].texcoord_0_offset[submesh_idx],
+                /*TEXCOORD_1*/ 0,
+                /*WEIGHTS_0*/ 0,
+                /*JOINTS_0*/ 0,
             };
 
-            ((MaterialData *)mapped_material_data_ptrs[frame_in_flight])[_meshes[mesh_idx].instance_id] = _meshes[mesh_idx].material_data;
+            ((MaterialData *)mapped_material_data_ptrs[frame_in_flight])[_meshes[mesh_idx].id] = _meshes[mesh_idx].material_data[submesh_idx];
 
             vkCmdBindVertexBuffers(command_buffer, 0, ARR_COUNT(buffers), buffers, offsets);
-            // vkCmdDrawIndexedIndirect(command_buffer, indirect_commands_buffer, 0, ARR_COUNT(commands), sizeof(commands[0]));
             vkCmdBindIndexBuffer(command_buffer, vertex_buffer, _meshes[mesh_idx].index_offset[submesh_idx], VK_INDEX_TYPE_UINT16);
-            vkCmdDrawIndexed(command_buffer, _meshes[mesh_idx].index_count[submesh_idx], 1, 0, 0, _meshes[mesh_idx].instance_id);
+            vkCmdDrawIndexed(command_buffer, _meshes[mesh_idx].index_count[submesh_idx], 1, 0, 0, _meshes[mesh_idx].id);
         }
     }
+}
+
+void SkinnedModel::AnimationUpdate(float dt)
+{
+
+    if (!_should_play_animation) return;
+
+    if (!_current_animation) {
+        SDL_Log("CurrentAnimation not set");
+        return;
+    }
+
+    auto anim = _current_animation;
+
+    assert(anim->duration > 0);
+    anim->isPlaying = true;
+
+    anim->globalTimer += dt;
+    float animTime = fmodf(anim->globalTimer, anim->duration);
+
+
+    static int iterationNb = 0;
+
+    if (iterationNb++ == 0) {
+        SDL_Log("playing:[%s] | duration: %fsec", ((cgltf_animation *)anim->handle)->name, anim->duration);
+    }
+
+    // For each Joint
+    int channel_idx = 0;
+    for (size_t joint_idx = 0; joint_idx < anim->_joints.size(); joint_idx++) {
+
+        auto channels   = ((cgltf_animation *)anim->handle)->channels;
+        int  currentKey = -1;
+        int  nextKey    = -1;
+
+        auto *sampler = channels[channel_idx].sampler;
+        for (size_t timestamp_idx = 0; timestamp_idx < sampler->input->count - 1; timestamp_idx++) {
+            float sampled_time = readFloatFromAccessor(sampler->input, timestamp_idx + 1);
+            float sampled_time_prev;
+
+            if (sampled_time > animTime) {
+                currentKey = timestamp_idx;
+                nextKey    = currentKey + 1;
+                break;
+            }
+        }
+
+
+        Transform currentPoseTransform;
+
+        if (channels[channel_idx].target_path == cgltf_animation_path_type_translation) {
+            currentPoseTransform.translation = getVec3AtKeyframe(channels[channel_idx].sampler, currentKey);
+            ++channel_idx;
+        }
+        if (channels[channel_idx].target_path == cgltf_animation_path_type_rotation) {
+            currentPoseTransform.rotation = getQuatAtKeyframe(channels[channel_idx].sampler, currentKey);
+            ++channel_idx;
+        }
+        if (channels[channel_idx].target_path == cgltf_animation_path_type_scale) {
+            currentPoseTransform.scale = getVec3AtKeyframe(channels[channel_idx].sampler, currentKey);
+            ++channel_idx;
+        }
+
+        auto current_pose_matrix = currentPoseTransform.GetLocalMatrix();
+        auto parent_idx          = anim->_joints[joint_idx].parent;
+
+        // comppute global matrix for current joint
+        if (parent_idx == -1 && joint_idx > 0)
+            anim->_joints[joint_idx].global_joint_matrix = current_pose_matrix;
+        else if (joint_idx == 0)
+            anim->_joints[0].global_joint_matrix = current_pose_matrix;
+        else
+            anim->_joints[joint_idx].global_joint_matrix = anim->_joints[parent_idx].global_joint_matrix * current_pose_matrix;
+
+        anim->joint_matrices[joint_idx] = anim->_joints[joint_idx].global_joint_matrix * anim->_joints[joint_idx].inv_bind_matrix;
+    } // End of Joints loop
 }

@@ -32,9 +32,12 @@ static errno_t GetPathFolder(char **dst, const char *src, uint32_t srcLength)
     return strncpy_s(*(char **)dst, size + 2, src, size + 1);
 }
 
+
+
 //
 // Sonme utility functions
 //
+
 static float AnimationGetClipDuration(cgltf_animation *animationClip)
 {
     float duration = 0;

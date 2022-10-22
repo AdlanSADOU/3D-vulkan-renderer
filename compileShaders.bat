@@ -8,3 +8,6 @@ pushd shaders
 %VULKAN_SDK_Bin%/glslc.exe standard.frag -o standard.frag.spv
 
 popd
+
+echo ----------------
+echo compiled shaders

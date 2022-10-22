@@ -20,8 +20,11 @@
 #include <vulkan/vulkan.h>
 
 #include "vk_types.h"
+#include "Animation.h"
 
-static std::unordered_map<std::string, void *> gSharedMeshes;
+struct Texture;
+static std::unordered_map<std::string, void *>    gSharedMeshes;
+static std::unordered_map<std::string, Texture *> gTextures;
 
 VkResult CreateBuffer(Buffer *buffer, VkDeviceSize size, VkBufferUsageFlags buffer_usage, VmaAllocationCreateFlags allocation_flags, VmaMemoryUsage memory_usage);
 void     TransitionImageLayout(VkCommandBuffer command_buffer, VkImage image, VkImageLayout old_layout, VkImageLayout new_layout, bool is_depth);
@@ -30,6 +33,9 @@ void     CreateGraphicsPipeline(VkDevice device, VkPipeline *pipeline);
 
 #define PROMPT_GPU_SELECTION_AT_STARTUP 0
 
+// this is used for bindless DrawDataSSBO & MaterialDataSSBO shader resources
+// which can be indexed for every rendered mesh
+#define MAX_RENDER_ENTITIES 1024 * 10
 
 
 
@@ -50,6 +56,39 @@ struct Transform
     glm::mat4 GetLocalMatrix();
     glm::mat4 ComputeGlobalMatrix();
 };
+
+glm::mat4 Transform::GetLocalMatrix()
+{
+
+    return glm::translate(glm::mat4(1), translation)
+        * glm::toMat4(rotation)
+        * glm::scale(glm::mat4(1), scale);
+}
+
+glm::mat4 Transform::ComputeGlobalMatrix()
+{
+    if (!parent) return GetLocalMatrix();
+
+    glm::mat4  globalMatrix = glm::mat4(1);
+    Transform *tmp          = this;
+
+    // ummm... yeah, this will be changed eventually
+    // it's the first iterative solution I came up with..
+    // turns out it is VERY terrible, not actually using it
+    std::list<Transform *> hierarchy;
+    while (tmp->parent) {
+        tmp = tmp->parent;
+        hierarchy.push_front(tmp);
+    }
+
+    for (auto &&i : hierarchy) {
+        globalMatrix *= i->GetLocalMatrix();
+    }
+    globalMatrix *= this->GetLocalMatrix();
+
+    return globalMatrix;
+}
+
 
 struct Input
 {
@@ -142,7 +181,7 @@ static std::unordered_map<VkResult, std::string>
 // VK_PRESENT_MODE_FIFO_KHR; // widest support / VSYNC
 // VK_PRESENT_MODE_IMMEDIATE_KHR; // present as fast as possible, high tearing chance
 // VK_PRESENT_MODE_MAILBOX_KHR; // present as fast as possible, high tearing chance
-VkPresentModeKHR present_mode = VK_PRESENT_MODE_IMMEDIATE_KHR;
+VkPresentModeKHR present_mode = VK_PRESENT_MODE_FIFO_KHR;
 
 SDL_Window      *gWindow = {};
 VkInstance       gInstance;
@@ -158,10 +197,7 @@ struct GPU
     VkPhysicalDeviceFeatures                   _features2;
     VkPhysicalDeviceLimits                     _limits;
     VkPhysicalDeviceDescriptorIndexingFeatures _descriptor_indexing_features;
-
-
 } gGpu;
-
 
 struct Queues
 {
@@ -194,11 +230,11 @@ struct Swapchain
 
 struct Texture
 {
-    VkImage        image;
-    VkDeviceMemory memory;
-    VmaAllocation  allocation;
-    VkImageView    view;
-    VkFormat       format;
+    const char   *name;
+    VkImage       image;
+    VmaAllocation allocation;
+    VkImageView   view;
+    VkFormat      format;
 
     int      width;
     int      height;
@@ -248,7 +284,7 @@ const uint32_t                     MAX_TEXTURE_COUNT = 1024;
 uint32_t                           textures_count    = 0;
 VkDescriptorSet                    gBindless_textures_set;
 VkDescriptorSetLayout              gBindless_textures_set_layout;
-std::vector<VkDescriptorImageInfo> descriptor_image_infos;
+std::vector<VkDescriptorImageInfo> gDescriptor_image_infos;
 VkSampler                          gDefaultSampler;
 
 
@@ -779,7 +815,7 @@ bool VulkanInit()
         material_data_set_layout_binding.binding         = 0;
         material_data_set_layout_binding.descriptorCount = 1; //
         material_data_set_layout_binding.descriptorType  = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-        material_data_set_layout_binding.stageFlags      = VK_SHADER_STAGE_VERTEX_BIT;
+        material_data_set_layout_binding.stageFlags      = VK_SHADER_STAGE_FRAGMENT_BIT;
         gMaterial_data_sets.resize(gSwapchain._image_count);
 
 
@@ -948,57 +984,90 @@ bool VulkanInit()
 
 
 
+    //
+    // Bindless Texture descriptor
+    //
+    {
+        VkDescriptorSetLayoutBinding desc_set_layout_binding_sampler = {};
+        desc_set_layout_binding_sampler.binding                      = 0;
+        desc_set_layout_binding_sampler.descriptorCount              = 1;
+        desc_set_layout_binding_sampler.descriptorType               = VK_DESCRIPTOR_TYPE_SAMPLER;
+        desc_set_layout_binding_sampler.stageFlags                   = VK_SHADER_STAGE_FRAGMENT_BIT;
+
+        VkDescriptorSetLayoutBinding desc_set_layout_binding_sampled_image = {};
+        desc_set_layout_binding_sampled_image.binding                      = 1;
+        desc_set_layout_binding_sampled_image.descriptorCount              = MAX_TEXTURE_COUNT; // texture count
+        desc_set_layout_binding_sampled_image.descriptorType               = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+        desc_set_layout_binding_sampled_image.stageFlags                   = VK_SHADER_STAGE_FRAGMENT_BIT;
+
+        /// layout > array of textures & sampler
+        std::vector<VkDescriptorSetLayoutBinding> array_of_textures_set_layout_bindings = {
+            desc_set_layout_binding_sampler,
+            desc_set_layout_binding_sampled_image
+        };
+
+        VkDescriptorSetLayoutCreateInfo create_info_desc_set_layout = {};
+        create_info_desc_set_layout.sType                           = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+        create_info_desc_set_layout.pNext                           = NULL;
+
+        create_info_desc_set_layout.flags        = 0;
+        create_info_desc_set_layout.pBindings    = array_of_textures_set_layout_bindings.data();
+        create_info_desc_set_layout.bindingCount = array_of_textures_set_layout_bindings.size();
+
+        vkCreateDescriptorSetLayout(gDevice, &create_info_desc_set_layout, NULL, &gBindless_textures_set_layout);
+        // Sampler
+        VkSamplerCreateInfo ci_sampler = {};
+        ci_sampler.sType               = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+        ci_sampler.minFilter           = VK_FILTER_NEAREST;
+        ci_sampler.magFilter           = VK_FILTER_NEAREST;
+        ci_sampler.addressModeU        = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+        ci_sampler.addressModeV        = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+        ci_sampler.addressModeW        = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+        ci_sampler.mipmapMode          = VK_SAMPLER_MIPMAP_MODE_NEAREST;
+        VKCHECK(vkCreateSampler(gDevice, &ci_sampler, NULL, &gDefaultSampler));
+
+        gDescriptor_image_infos.resize(MAX_TEXTURE_COUNT);
+        memset(gDescriptor_image_infos.data(), VK_NULL_HANDLE, gDescriptor_image_infos.size() * sizeof(VkDescriptorImageInfo));
 
 
-    VkDescriptorSetLayoutBinding desc_set_layout_binding_sampler = {};
-    desc_set_layout_binding_sampler.binding                      = 0;
-    desc_set_layout_binding_sampler.descriptorCount              = 1;
-    desc_set_layout_binding_sampler.descriptorType               = VK_DESCRIPTOR_TYPE_SAMPLER;
-    desc_set_layout_binding_sampler.stageFlags                   = VK_SHADER_STAGE_FRAGMENT_BIT;
+        VkDescriptorSetAllocateInfo desc_alloc_info {};
+        desc_alloc_info.sType              = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+        desc_alloc_info.descriptorPool     = gDescriptor_pool;
+        desc_alloc_info.descriptorSetCount = 1;
+        desc_alloc_info.pSetLayouts        = &gBindless_textures_set_layout;
 
-    VkDescriptorSetLayoutBinding desc_set_layout_binding_sampled_image = {};
-    desc_set_layout_binding_sampled_image.binding                      = 1;
-    desc_set_layout_binding_sampled_image.descriptorCount              = MAX_TEXTURE_COUNT; // texture count
-    desc_set_layout_binding_sampled_image.descriptorType               = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
-    desc_set_layout_binding_sampled_image.stageFlags                   = VK_SHADER_STAGE_FRAGMENT_BIT;
+        VKCHECK(vkAllocateDescriptorSets(gDevice, &desc_alloc_info, &gBindless_textures_set));
 
-    /// layout > array of textures & sampler
-    std::vector<VkDescriptorSetLayoutBinding> array_of_textures_set_layout_bindings = {
-        desc_set_layout_binding_sampler,
-        desc_set_layout_binding_sampled_image
-    };
+        // VkDescriptorImageInfo desc_image_info {};
+        // desc_image_info.sampler          = NULL;
+        // desc_image_info.imageLayout      = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        // desc_image_info.imageView        = view;
+        // gDescriptor_image_infos[textures_count] = desc_image_info;
 
-    VkDescriptorSetLayoutCreateInfo create_info_desc_set_layout = {};
-    create_info_desc_set_layout.sType                           = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-    create_info_desc_set_layout.pNext                           = NULL;
+        VkWriteDescriptorSet setWrites[2] {};
 
-    create_info_desc_set_layout.flags        = 0;
-    create_info_desc_set_layout.pBindings    = array_of_textures_set_layout_bindings.data();
-    create_info_desc_set_layout.bindingCount = array_of_textures_set_layout_bindings.size();
+        VkDescriptorImageInfo samplerInfo {};
+        samplerInfo.sampler = gDefaultSampler;
 
-    vkCreateDescriptorSetLayout(gDevice, &create_info_desc_set_layout, NULL, &gBindless_textures_set_layout);
-    // Sampler
-    VkSamplerCreateInfo ci_sampler = {};
-    ci_sampler.sType               = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
-    ci_sampler.minFilter           = VK_FILTER_NEAREST;
-    ci_sampler.magFilter           = VK_FILTER_NEAREST;
-    ci_sampler.addressModeU        = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-    ci_sampler.addressModeV        = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-    ci_sampler.addressModeW        = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-    ci_sampler.mipmapMode          = VK_SAMPLER_MIPMAP_MODE_NEAREST;
-    VKCHECK(vkCreateSampler(gDevice, &ci_sampler, NULL, &gDefaultSampler));
+        setWrites[0].sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        setWrites[0].dstSet          = gBindless_textures_set;
+        setWrites[0].dstBinding      = 0;
+        setWrites[0].dstArrayElement = 0;
+        setWrites[0].descriptorCount = 1;
+        setWrites[0].descriptorType  = VK_DESCRIPTOR_TYPE_SAMPLER;
+        setWrites[0].pImageInfo      = &samplerInfo;
+        setWrites[0].pBufferInfo     = 0;
 
-    descriptor_image_infos.resize(MAX_TEXTURE_COUNT);
-    memset(descriptor_image_infos.data(), VK_NULL_HANDLE, descriptor_image_infos.size() * sizeof(VkDescriptorImageInfo));
-
-
-    VkDescriptorSetAllocateInfo desc_alloc_info {};
-    desc_alloc_info.sType              = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-    desc_alloc_info.descriptorPool     = gDescriptor_pool;
-    desc_alloc_info.descriptorSetCount = 1;
-    desc_alloc_info.pSetLayouts        = &gBindless_textures_set_layout;
-
-    VKCHECK(vkAllocateDescriptorSets(gDevice, &desc_alloc_info, &gBindless_textures_set));
+        setWrites[1].sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        setWrites[1].dstSet          = gBindless_textures_set;
+        setWrites[1].dstBinding      = 1;
+        setWrites[1].dstArrayElement = 0;
+        setWrites[1].descriptorCount = (uint32_t)gDescriptor_image_infos.size();
+        setWrites[1].descriptorType  = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+        setWrites[1].pImageInfo      = gDescriptor_image_infos.data();
+        setWrites[1].pBufferInfo     = 0;
+        vkUpdateDescriptorSets(gDevice, 2, setWrites, 0, NULL);
+    }
 
     //
     // Pipelines
@@ -1238,9 +1307,9 @@ static void CreateGraphicsPipeline(VkDevice device, VkPipeline *pipeline)
     raster_state_ci.lineWidth = 1.f;
 
     //
-    // Vertex input state
+    // Vertex input state - Non-interleaved, so we must bind each vertex attribute to a different slot
     //
-    const int                       BINDING_COUNT = 3;
+    const int                       BINDING_COUNT = 4;
     VkVertexInputBindingDescription vertex_binding_descriptions[BINDING_COUNT] { 0 };
     vertex_binding_descriptions[0].binding   = 0; // corresponds to vkCmdBindVertexBuffer(binding)
     vertex_binding_descriptions[0].stride    = sizeof(float) * 3;
@@ -1254,8 +1323,12 @@ static void CreateGraphicsPipeline(VkDevice device, VkPipeline *pipeline)
     vertex_binding_descriptions[2].stride    = sizeof(float) * 2;
     vertex_binding_descriptions[2].inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
 
+    vertex_binding_descriptions[3].binding   = 3; // corresponds to vkCmdBindVertexBuffer(binding)
+    vertex_binding_descriptions[3].stride    = sizeof(float) * 2;
+    vertex_binding_descriptions[3].inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
 
-    const int                         ATTRIB_COUNT = 3;
+
+    const int                         ATTRIB_COUNT = 4;
     VkVertexInputAttributeDescription vertex_attrib_descriptions[ATTRIB_COUNT] { 0 };
     vertex_attrib_descriptions[0].location = 0;
     vertex_attrib_descriptions[0].binding  = 0;
@@ -1271,6 +1344,11 @@ static void CreateGraphicsPipeline(VkDevice device, VkPipeline *pipeline)
     vertex_attrib_descriptions[2].binding  = 2;
     vertex_attrib_descriptions[2].format   = VK_FORMAT_R32G32_SFLOAT;
     vertex_attrib_descriptions[2].offset   = 0;
+
+    vertex_attrib_descriptions[3].location = 3;
+    vertex_attrib_descriptions[3].binding  = 3;
+    vertex_attrib_descriptions[3].format   = VK_FORMAT_R32G32_SFLOAT;
+    vertex_attrib_descriptions[3].offset   = 0;
 
     VkPipelineVertexInputStateCreateInfo vertex_input_state_ci {};
     vertex_input_state_ci.sType                           = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
@@ -1339,19 +1417,19 @@ static void CreateGraphicsPipeline(VkDevice device, VkPipeline *pipeline)
     // Color blend state
     //
     VkPipelineColorBlendAttachmentState color_blend_attachment_state {};
-    color_blend_attachment_state.blendEnable;
-    color_blend_attachment_state.srcColorBlendFactor = VK_BLEND_FACTOR_ZERO;
-    color_blend_attachment_state.dstColorBlendFactor = VK_BLEND_FACTOR_ZERO;
+    color_blend_attachment_state.blendEnable         = VK_FALSE;
+    color_blend_attachment_state.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
+    color_blend_attachment_state.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
     color_blend_attachment_state.colorBlendOp        = VK_BLEND_OP_ADD;
-    color_blend_attachment_state.srcAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
-    color_blend_attachment_state.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
+    color_blend_attachment_state.srcAlphaBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
+    color_blend_attachment_state.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
     color_blend_attachment_state.alphaBlendOp        = VK_BLEND_OP_ADD;
     color_blend_attachment_state.colorWriteMask      = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
 
     VkPipelineColorBlendStateCreateInfo color_blend_state_ci {};
-    color_blend_state_ci.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
-    color_blend_state_ci.logicOpEnable;
-    color_blend_state_ci.logicOp           = VK_LOGIC_OP_NO_OP;
+    color_blend_state_ci.sType             = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+    color_blend_state_ci.logicOpEnable     = VK_FALSE;
+    color_blend_state_ci.logicOp           = VK_LOGIC_OP_COPY;
     color_blend_state_ci.attachmentCount   = 1;
     color_blend_state_ci.pAttachments      = &color_blend_attachment_state;
     color_blend_state_ci.blendConstants[0] = 1.f;
@@ -1398,11 +1476,12 @@ static void CreateGraphicsPipeline(VkDevice device, VkPipeline *pipeline)
     VkPipelineMultisampleStateCreateInfo multisample_state_ci {};
     multisample_state_ci.sType                = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
     multisample_state_ci.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
-    multisample_state_ci.sampleShadingEnable;
+    multisample_state_ci.sampleShadingEnable  = VK_FALSE;
     multisample_state_ci.minSampleShading;
     multisample_state_ci.pSampleMask;
     multisample_state_ci.alphaToCoverageEnable;
     multisample_state_ci.alphaToOneEnable;
+
 
     //
     // Pipeline state
@@ -1436,6 +1515,10 @@ static void CreateGraphicsPipeline(VkDevice device, VkPipeline *pipeline)
     VKCHECK(vkCreateGraphicsPipelines(device, 0, 1, &pipeline_ci, NULL, pipeline));
 }
 
+
+
+
+
 /////////////////////////////////
 // vulkan utility functions
 
@@ -1456,7 +1539,6 @@ static VkResult CreateBuffer(Buffer *buffer, VkDeviceSize size, VkBufferUsageFla
 
 static void TransitionImageLayout(VkCommandBuffer command_buffer, VkImage image, VkImageLayout old_layout, VkImageLayout new_layout, bool is_depth)
 {
-
     VkImageMemoryBarrier2 barrier = {};
     barrier.sType                 = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
     barrier.oldLayout             = old_layout;
@@ -1472,23 +1554,28 @@ static void TransitionImageLayout(VkCommandBuffer command_buffer, VkImage image,
     barrier.subresourceRange.baseArrayLayer = 0;
     barrier.subresourceRange.layerCount     = 1;
 
-    barrier.srcStageMask = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
-    barrier.dstStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+    barrier.srcStageMask = VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT;
+    barrier.dstStageMask = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;
 
     if (old_layout == VK_IMAGE_LAYOUT_UNDEFINED) {
         if (new_layout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL) {
             barrier.srcAccessMask = 0;
             barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
 
-            barrier.srcStageMask = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
-            barrier.dstStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
-        }
-        if (new_layout == VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL) {
+            barrier.srcStageMask = VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT;
+            barrier.dstStageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT;
+        } else if (new_layout == VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL || new_layout == VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL && is_depth) {
             barrier.srcAccessMask = 0;
             barrier.dstAccessMask = VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
 
-            barrier.srcStageMask = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
-            barrier.dstStageMask = VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT;
+            barrier.srcStageMask = VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT;
+            barrier.dstStageMask = VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT;
+        } else if (new_layout == VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL || new_layout == VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL && !is_depth) {
+            barrier.srcAccessMask = 0;
+            barrier.dstAccessMask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT;
+
+            barrier.srcStageMask = VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT;
+            barrier.dstStageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
         }
 
     } else if (old_layout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL && new_layout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) {
@@ -1509,7 +1596,6 @@ static void TransitionImageLayout(VkCommandBuffer command_buffer, VkImage image,
 
     vkCmdPipelineBarrier2(command_buffer, &dependency_info);
 }
-
 
 void Texture::Create(const char *filepath)
 {
@@ -1638,11 +1724,11 @@ void Texture::Create(const char *filepath)
     vmaDestroyBuffer(gAllocator, staging_buffer.handle, staging_buffer.vma_allocation);
 
 
-    VkDescriptorImageInfo desc_image_image_info {};
-    desc_image_image_info.sampler          = NULL;
-    desc_image_image_info.imageLayout      = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-    desc_image_image_info.imageView        = view;
-    descriptor_image_infos[textures_count] = desc_image_image_info;
+    VkDescriptorImageInfo desc_image_info {};
+    desc_image_info.sampler                 = NULL;
+    desc_image_info.imageLayout             = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    desc_image_info.imageView               = view;
+    gDescriptor_image_infos[textures_count] = desc_image_info;
 
     VkWriteDescriptorSet setWrites[2] {};
 
@@ -1662,9 +1748,9 @@ void Texture::Create(const char *filepath)
     setWrites[1].dstSet          = gBindless_textures_set;
     setWrites[1].dstBinding      = 1;
     setWrites[1].dstArrayElement = 0;
-    setWrites[1].descriptorCount = (uint32_t)descriptor_image_infos.size();
+    setWrites[1].descriptorCount = (uint32_t)gDescriptor_image_infos.size();
     setWrites[1].descriptorType  = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
-    setWrites[1].pImageInfo      = descriptor_image_infos.data();
+    setWrites[1].pImageInfo      = gDescriptor_image_infos.data();
     setWrites[1].pBufferInfo     = 0;
     vkUpdateDescriptorSets(gDevice, 2, setWrites, 0, NULL);
 
