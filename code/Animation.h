@@ -27,7 +27,7 @@ struct Sample
 struct Joint
 {
     char     *name;
-    int8_t    parent; // 128 max joints!!
+    int8_t    parent;
     glm::mat4 inv_bind_matrix;
     glm::mat4 global_joint_matrix;
 };

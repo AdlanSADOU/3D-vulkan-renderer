@@ -33,11 +33,18 @@ struct SkinnedModel
     cgltf_data   *_mesh_data;
     struct SkinnedMesh
     {
-        uint32_t                  id;
+        uint32_t id;
+
         std::vector<MaterialData> material_data {};
-        std::vector<VkDeviceSize> positions_offset;
-        std::vector<VkDeviceSize> normals_offset;
-        std::vector<VkDeviceSize> texcoord_0_offset;
+
+        // offsets to non-interleaved vertex attributes
+        std::vector<VkDeviceSize> POSITION_offset;
+        std::vector<VkDeviceSize> NORMAL_offset;
+        std::vector<VkDeviceSize> TEXCOORD_0_offset;
+        std::vector<VkDeviceSize> TEXCOORD_1_offset;
+        std::vector<VkDeviceSize> JOINTS_0_offset;
+        std::vector<VkDeviceSize> WEIGHTS_0_offset;
+
         std::vector<VkDeviceSize> index_offset;
         std::vector<uint32_t>     index_count;
     };
@@ -93,18 +100,21 @@ void SkinnedModel::Create(const char *path)
 
 
     for (size_t mesh_idx = 0; mesh_idx < _mesh_data->meshes_count; mesh_idx++) {
-        auto mesh = &_meshes[mesh_idx];
+        auto mesh             = &_meshes[mesh_idx];
+        auto primitives_count = _mesh_data->meshes[mesh_idx].primitives_count;
 
-        mesh->positions_offset.resize(_mesh_data->meshes[mesh_idx].primitives_count);
-        mesh->normals_offset.resize(_mesh_data->meshes[mesh_idx].primitives_count);
-        mesh->texcoord_0_offset.resize(_mesh_data->meshes[mesh_idx].primitives_count);
+        mesh->material_data.resize(primitives_count);
+        mesh->POSITION_offset.resize(primitives_count);
+        mesh->NORMAL_offset.resize(primitives_count);
+        mesh->TEXCOORD_0_offset.resize(primitives_count);
+        mesh->TEXCOORD_1_offset.resize(primitives_count);
+        mesh->JOINTS_0_offset.resize(primitives_count);
+        mesh->WEIGHTS_0_offset.resize(primitives_count);
+        mesh->index_offset.resize(primitives_count);
+        mesh->index_count.resize(primitives_count);
 
-        mesh->index_offset.resize(_mesh_data->meshes[mesh_idx].primitives_count);
-        mesh->index_count.resize(_mesh_data->meshes[mesh_idx].primitives_count);
-        mesh->material_data.resize(_mesh_data->meshes[mesh_idx].primitives_count);
 
-
-        for (size_t submesh_idx = 0; submesh_idx < _mesh_data->meshes[mesh_idx].primitives_count; submesh_idx++) {
+        for (size_t submesh_idx = 0; submesh_idx < primitives_count; submesh_idx++) {
             //
             // Vertex Attributes
             //
@@ -115,11 +125,17 @@ void SkinnedModel::Create(const char *path)
                 cgltf_buffer_view *view   = attrib->data->buffer_view;
 
                 if (attrib->type == cgltf_attribute_type_position)
-                    mesh->positions_offset[submesh_idx] = view->offset;
-                if (attrib->type == cgltf_attribute_type_normal)
-                    mesh->normals_offset[submesh_idx] = view->offset;
-                if (attrib->type == cgltf_attribute_type_texcoord && strcmp(attrib->name, "TEXCOORD_0") == 0)
-                    mesh->texcoord_0_offset[submesh_idx] = view->offset;
+                    mesh->POSITION_offset[submesh_idx] = view->offset;
+                else if (attrib->type == cgltf_attribute_type_normal)
+                    mesh->NORMAL_offset[submesh_idx] = view->offset;
+                else if (attrib->type == cgltf_attribute_type_texcoord && strcmp(attrib->name, "TEXCOORD_0") == 0)
+                    mesh->TEXCOORD_0_offset[submesh_idx] = view->offset;
+                else if (attrib->type == cgltf_attribute_type_texcoord && strcmp(attrib->name, "TEXCOORD_1") == 0)
+                    mesh->TEXCOORD_1_offset[submesh_idx] = view->offset;
+                else if (attrib->type == cgltf_attribute_type_joints)
+                    mesh->JOINTS_0_offset[submesh_idx] = view->offset;
+                else if (attrib->type == cgltf_attribute_type_weights)
+                    mesh->WEIGHTS_0_offset[submesh_idx] = view->offset;
             }
 
             mesh->index_offset[submesh_idx] = primitive->indices->buffer_view->offset;
@@ -170,7 +186,9 @@ void SkinnedModel::Create(const char *path)
 
 
 
-
+    //
+    // Animations
+    //
     auto data = _mesh_data; // yayaya
     // if no animations to handle, we just end here
     if (!data->animations_count) return;
@@ -236,80 +254,100 @@ void SkinnedModel::Create(const char *path)
 
 
 
-    ////////// todo: figure out if we should actually go this route
-    ////// Process animation samples
-    auto anims_data = data->animations;
+    // ////////// todo: figure out if we should actually go this route
+    // ////// Process animation samples
+    // auto anims_data = data->animations;
 
-    _animations_v2.resize(data->animations_count);
-    for (size_t anim_idx = 0; anim_idx < data->animations_count; anim_idx++) {
-        int sample_count = AnimationMaxSampleCount(anims_data);
-        _animations_v2[anim_idx].samples.resize(skin->joints_count);
+    // _animations_v2.resize(data->animations_count);
+    // for (size_t anim_idx = 0; anim_idx < data->animations_count; anim_idx++) {
+    //     int sample_count = AnimationMaxSampleCount(anims_data);
+    //     _animations_v2[anim_idx].samples.resize(skin->joints_count);
 
-        // For each Joint
-        for (size_t joint_idx = 0; joint_idx < skin->joints_count; joint_idx++) {
+    //     // For each Joint
+    //     for (size_t joint_idx = 0; joint_idx < skin->joints_count; joint_idx++) {
 
-            // For each Channel
-            for (size_t chan_idx = 0; chan_idx < anims_data->channels_count; chan_idx++) {
-                cgltf_animation_channel *channel = &anims_data->channels[chan_idx];
+    //         // For each Channel
+    //         for (size_t chan_idx = 0; chan_idx < anims_data->channels_count; chan_idx++) {
+    //             cgltf_animation_channel *channel = &anims_data->channels[chan_idx];
 
-                // if channel target matches current joint
-                if (channel->target_node == skin->joints[joint_idx]) {
+    //             // if channel target matches current joint
+    //             if (channel->target_node == skin->joints[joint_idx]) {
 
-                    cgltf_animation_sampler *sampler = channel->sampler;
+    //                 cgltf_animation_sampler *sampler = channel->sampler;
 
-                    _animations_v2[anim_idx].samples[joint_idx].target_joint = joint_idx;
+    //                 _animations_v2[anim_idx].samples[joint_idx].target_joint = joint_idx;
 
-                    auto   input_data_ptr    = (uint8_t *)sampler->input->buffer_view->buffer->data;
-                    auto   input_data_offset = sampler->input->buffer_view->offset;
-                    float *timestamps_data   = (float *)(input_data_ptr + input_data_offset);
+    //                 auto   input_data_ptr    = (uint8_t *)sampler->input->buffer_view->buffer->data;
+    //                 auto   input_data_offset = sampler->input->buffer_view->offset;
+    //                 float *timestamps_data   = (float *)(input_data_ptr + input_data_offset);
 
-                    auto   output_data_ptr     = (uint8_t *)sampler->output->buffer_view->buffer->data;
-                    auto   output_data_offset  = sampler->output->buffer_view->offset;
-                    float *transformation_data = (float *)(output_data_ptr + output_data_offset);
+    //                 auto   output_data_ptr     = (uint8_t *)sampler->output->buffer_view->buffer->data;
+    //                 auto   output_data_offset  = sampler->output->buffer_view->offset;
+    //                 float *transformation_data = (float *)(output_data_ptr + output_data_offset);
 
-                    if (channel->target_path == cgltf_animation_path_type_translation) {
-                        _animations_v2[anim_idx].samples[joint_idx].translation_channel.timestamps   = timestamps_data;
-                        _animations_v2[anim_idx].samples[joint_idx].translation_channel.translations = (glm::vec3 *)transformation_data;
+    //                 if (channel->target_path == cgltf_animation_path_type_translation) {
+    //                     _animations_v2[anim_idx].samples[joint_idx].translation_channel.timestamps   = timestamps_data;
+    //                     _animations_v2[anim_idx].samples[joint_idx].translation_channel.translations = (glm::vec3 *)transformation_data;
 
-                    } else if (channel->target_path == cgltf_animation_path_type_rotation) {
-                        _animations_v2[anim_idx].samples[joint_idx].rotation_channel.timestamps = timestamps_data;
-                        _animations_v2[anim_idx].samples[joint_idx].rotation_channel.rotations  = (glm::quat *)transformation_data;
-                    } else if (channel->target_path == cgltf_animation_path_type_scale) {
-                        _animations_v2[anim_idx].samples[joint_idx].scale_channel.timestamps = timestamps_data;
-                        _animations_v2[anim_idx].samples[joint_idx].scale_channel.scales     = (glm::vec3 *)transformation_data; // fixme: we might want to scope this to uniform scale only
-                    }
-                }
-            } // End of channels loop for the current joint
-        } // End of Joints loop
-    }
+    //                 } else if (channel->target_path == cgltf_animation_path_type_rotation) {
+    //                     _animations_v2[anim_idx].samples[joint_idx].rotation_channel.timestamps = timestamps_data;
+    //                     _animations_v2[anim_idx].samples[joint_idx].rotation_channel.rotations  = (glm::quat *)transformation_data;
+    //                 } else if (channel->target_path == cgltf_animation_path_type_scale) {
+    //                     _animations_v2[anim_idx].samples[joint_idx].scale_channel.timestamps = timestamps_data;
+    //                     _animations_v2[anim_idx].samples[joint_idx].scale_channel.scales     = (glm::vec3 *)transformation_data; // fixme: we might want to scope this to uniform scale only
+    //                 }
+    //             }
+    //         } // End of channels loop for the current joint
+    //     } // End of Joints loop
+    // }
 }
 
 void SkinnedModel::Draw(VkCommandBuffer command_buffer, uint32_t frame_in_flight)
 {
+    VkBuffer buffers[6];
 
-
-    VkBuffer buffers[] = {
-        vertex_buffer,
-        vertex_buffer,
-        vertex_buffer,
-        VK_NULL_HANDLE,
-        VK_NULL_HANDLE,
-        VK_NULL_HANDLE,
-    };
+    // if (_animations.size() > 0)
+    {
+        buffers[0] = vertex_buffer;
+        buffers[1] = vertex_buffer;
+        buffers[2] = vertex_buffer;
+        buffers[3] = vertex_buffer;
+        buffers[4] = vertex_buffer;
+        buffers[5] = vertex_buffer;
+    }
+    // else
+    // {
+    //     buffers[0] = vertex_buffer;
+    //     buffers[1] = vertex_buffer;
+    //     buffers[2] = vertex_buffer;
+    //     buffers[3] = VK_NULL_HANDLE;
+    //     buffers[4] = VK_NULL_HANDLE;
+    //     buffers[5] = VK_NULL_HANDLE;
+    // }
 
     for (size_t mesh_idx = 0; mesh_idx < _meshes.size(); mesh_idx++) {
 
         for (size_t submesh_idx = 0; submesh_idx < _meshes[mesh_idx].index_count.size(); submesh_idx++) {
 
-            // offset to the start of non-interleaved attributes within same buffer
-            VkDeviceSize offsets[] = {
-                /*POSITION*/ _meshes[mesh_idx].positions_offset[submesh_idx],
-                /*NORMAL   */ _meshes[mesh_idx].normals_offset[submesh_idx],
-                /*TEXCOORD_0   */ _meshes[mesh_idx].texcoord_0_offset[submesh_idx],
-                /*TEXCOORD_1*/ 0,
-                /*WEIGHTS_0*/ 0,
-                /*JOINTS_0*/ 0,
-            };
+            VkDeviceSize offsets[6] {};
+            // offsets to the start of non-interleaved attributes within same buffer
+            // if (_animations.size() > 0)
+            {
+                /*POSITION  */ offsets[0] = _meshes[mesh_idx].POSITION_offset[submesh_idx];
+                /*NORMAL    */ offsets[1] = _meshes[mesh_idx].NORMAL_offset[submesh_idx];
+                /*TEXCOORD_0*/ offsets[2] = _meshes[mesh_idx].TEXCOORD_0_offset[submesh_idx];
+                /*TEXCOORD_1*/ offsets[3] = _meshes[mesh_idx].TEXCOORD_1_offset[submesh_idx];
+                /*JOINTS_0  */ offsets[4] = _meshes[mesh_idx].JOINTS_0_offset[submesh_idx];
+                /*WEIGHTS_0 */ offsets[5] = _meshes[mesh_idx].WEIGHTS_0_offset[submesh_idx];
+            }
+            // else {
+            //     /*POSITION  */ offsets[0] = _meshes[mesh_idx].POSITION_offset[submesh_idx];
+            //     /*NORMAL    */ offsets[1] = _meshes[mesh_idx].NORMAL_offset[submesh_idx];
+            //     /*TEXCOORD_0*/ offsets[2] = _meshes[mesh_idx].TEXCOORD_0_offset[submesh_idx];
+            //     /*TEXCOORD_1*/ offsets[3] = 0;
+            //     /*JOINTS_0  */ offsets[4] = 0;
+            //     /*WEIGHTS_0 */ offsets[5] = 0;
+            // }
 
             ((MaterialData *)mapped_material_data_ptrs[frame_in_flight])[_meshes[mesh_idx].id] = _meshes[mesh_idx].material_data[submesh_idx];
 

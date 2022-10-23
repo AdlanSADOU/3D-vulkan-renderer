@@ -27,7 +27,7 @@ struct Entity
     SkinnedModel model;
     Transform    _transform;
 
-    uint32_t draw_data_idx;
+    int32_t draw_data_idx;
 };
 
 std::vector<Entity> entities {};
@@ -63,11 +63,11 @@ extern int main(int argc, char **argv)
             // then the following line will crash
             entities[i]._transform.translation = { startingOffset + x * distanceFactor, 0.f, startingOffset + z * distanceFactor };
             entities[i]._transform.rotation    = glm::quat({ 0, 0, 0 });
-            entities[i]._transform.scale       = glm::vec3(10.0f);
+            entities[i]._transform.scale       = glm::vec3(.10f);
             entities[i].draw_data_idx          = i;
 
-            // entities[i].model._current_animation     = &entities[i].model._animations[0];
-            // entities[i].model._should_play_animation = true;
+            entities[i].model._current_animation     = &entities[i].model._animations[0];
+            entities[i].model._should_play_animation = true;
         } else if (i == 1) {
             entities[i].model.Create("assets/terrain/terrain.gltf"); // fixme: if for some reason this fails to load
             // then the following line will crash
@@ -86,16 +86,13 @@ extern int main(int argc, char **argv)
             entities[i].model.vertex_buffer            = entities[0].model.vertex_buffer;
             entities[i].model.vertex_buffer_allocation = entities[0].model.vertex_buffer_allocation;
 
-            entities[i]._transform.translation = { startingOffset + x * distanceFactor, 0.f, startingOffset + z * distanceFactor };
-            entities[i]._transform.rotation    = glm::quat({ 0, 0, 0 });
-            entities[i]._transform.scale       = glm::vec3(10.0f);
-            entities[i].draw_data_idx          = i;
-            // entities[i].model._current_animation     = &entities[i].model._animations[0];
-            // entities[i].model._should_play_animation = true;
+            entities[i]._transform.translation       = { startingOffset + x * distanceFactor, 0.f, startingOffset + z * distanceFactor };
+            entities[i]._transform.rotation          = glm::quat({ 0, 0, 0 });
+            entities[i]._transform.scale             = glm::vec3(10.0f);
+            entities[i].draw_data_idx                = i;
+            entities[i].model._current_animation     = &entities[i].model._animations[0];
+            entities[i].model._should_play_animation = true;
         }
-
-
-        // ComputeLocalJointTransforms((cgltf_data *)entities[i].model._meshData.ptr);
     }
 
 
@@ -298,7 +295,6 @@ extern int main(int argc, char **argv)
 
 
                     for (size_t i = 0; i < entities.size(); i++) {
-                        // entities[i].model.AnimationUpdate(dt);
 
 
                         glm::mat4 model = glm::mat4(1);
@@ -309,19 +305,24 @@ extern int main(int argc, char **argv)
                             * glm::rotate(model, (glm::radians(entities[i]._transform.rotation.x)), glm::vec3(1, 0, 0))
                             * glm::scale(model, glm::vec3(entities[i]._transform.scale));
 
+                        ((ObjectData *)mapped_draw_data_ptrs[frame_in_flight])[entities[i].draw_data_idx];
 
-                        ((DrawDataSSBO *)mapped_draw_data_ptrs[frame_in_flight])[entities[i].draw_data_idx].model = model;
+                        ((ObjectData *)mapped_draw_data_ptrs[frame_in_flight])[entities[i].draw_data_idx].model = model;
+
+                        PushConstants constants;
+                        constants.draw_data_idx = entities[i].draw_data_idx;
 
                         if (entities[i].model._current_animation) {
-                            auto joint_matrices = entities[i].model._current_animation->joint_matrices;
-                            for (size_t i = 0; i < joint_matrices.size(); i++) {
-                                ((DrawDataSSBO *)mapped_draw_data_ptrs[frame_in_flight])[entities[i].draw_data_idx].joint_matrices[i] = joint_matrices[i];
+                            entities[i].model.AnimationUpdate(dt);
+
+                            constants.has_joints = 1;
+                            auto joint_matrices  = entities[i].model._current_animation->joint_matrices;
+                            for (size_t mat_idx = 0; mat_idx < joint_matrices.size(); mat_idx++) {
+                                ((ObjectData *)mapped_draw_data_ptrs[frame_in_flight])[entities[i].draw_data_idx].joint_matrices[mat_idx] = joint_matrices[mat_idx];
                             }
                         }
 
 
-                        PushConstants constants;
-                        constants.draw_data_idx = entities[i].draw_data_idx;
                         vkCmdPushConstants(graphics_cmd_buffer, gDefault_graphics_pipeline_layout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(PushConstants), &constants);
 
                         entities[i].model.Draw(graphics_cmd_buffer, frame_in_flight);

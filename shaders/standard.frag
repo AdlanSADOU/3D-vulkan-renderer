@@ -31,7 +31,7 @@ layout(set = 2, binding = 0)  buffer SSBO {
 
 void main()
 {
-    float shade = dot(v_out_NORMAL, vec3(.5, .5, .4));
+    float shade = dot(v_out_NORMAL, vec3(.5, .5, .4))*1.5;
 
     // v_out_color = material.data[gl_BaseInstance].color;
     MaterialData mat = material.data[baseInstance];

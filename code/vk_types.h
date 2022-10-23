@@ -14,19 +14,22 @@ struct Buffer
 
 struct GlobalUniforms
 {
-    alignas(16) glm::mat4 projection;
-    alignas(16) glm::mat4 view;
+    glm::mat4 projection;
+    glm::mat4 view;
 };
 
-struct DrawDataSSBO
+struct ObjectData
 {
     glm::mat4 model;
-    glm::mat4 joint_matrices[64];
+    glm::mat4 joint_matrices[128];
 };
 
 struct PushConstants
 {
-    uint32_t draw_data_idx;
+    int32_t draw_data_idx = -1;
+    int32_t has_joints = -1;
+    int32_t pad[2];
+
 };
 
 struct MaterialData
@@ -39,5 +42,52 @@ struct MaterialData
     float   tiling_y                       = 1.f;
     float   metallic_factor;
     float   roughness_factor;
-    alignas(16) glm::vec4 base_color_factor;
+    glm::vec4 base_color_factor;
 };
+
+
+
+
+struct Transform
+{
+    const char *name        = {};
+    Transform  *parent      = {};
+    Transform  *child       = {};
+    glm::vec3   scale       = {};
+    glm::quat   rotation    = {};
+    glm::vec3   translation = {};
+
+    glm::mat4 GetLocalMatrix();
+    glm::mat4 ComputeGlobalMatrix();
+};
+
+glm::mat4 Transform::GetLocalMatrix()
+{
+    return glm::translate(glm::mat4(1), translation)
+        * glm::toMat4(rotation)
+        * glm::scale(glm::mat4(1), scale);
+}
+
+glm::mat4 Transform::ComputeGlobalMatrix()
+{
+    if (!parent) return GetLocalMatrix();
+
+    glm::mat4  globalMatrix = glm::mat4(1);
+    Transform *tmp          = this;
+
+    // ummm... yeah, this will be changed eventually
+    // it's the first iterative solution I came up with..
+    // turns out it is VERY terrible, not actually using it
+    std::list<Transform *> hierarchy;
+    while (tmp->parent) {
+        tmp = tmp->parent;
+        hierarchy.push_front(tmp);
+    }
+
+    for (auto &&i : hierarchy) {
+        globalMatrix *= i->GetLocalMatrix();
+    }
+    globalMatrix *= this->GetLocalMatrix();
+
+    return globalMatrix;
+}

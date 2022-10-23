@@ -33,9 +33,9 @@ void     CreateGraphicsPipeline(VkDevice device, VkPipeline *pipeline);
 
 #define PROMPT_GPU_SELECTION_AT_STARTUP 0
 
-// this is used for bindless DrawDataSSBO & MaterialDataSSBO shader resources
+// this is used for bindless ObjectData & MaterialDataSSBO shader resources
 // which can be indexed for every rendered mesh
-#define MAX_RENDER_ENTITIES 1024 * 10
+#define MAX_RENDER_ENTITIES 1024
 
 
 
@@ -44,50 +44,6 @@ void     CreateGraphicsPipeline(VkDevice device, VkPipeline *pipeline);
 
 struct Camera;
 
-struct Transform
-{
-    const char *name        = {};
-    Transform  *parent      = {};
-    Transform  *child       = {};
-    glm::vec3   scale       = {};
-    glm::quat   rotation    = {};
-    glm::vec3   translation = {};
-
-    glm::mat4 GetLocalMatrix();
-    glm::mat4 ComputeGlobalMatrix();
-};
-
-glm::mat4 Transform::GetLocalMatrix()
-{
-
-    return glm::translate(glm::mat4(1), translation)
-        * glm::toMat4(rotation)
-        * glm::scale(glm::mat4(1), scale);
-}
-
-glm::mat4 Transform::ComputeGlobalMatrix()
-{
-    if (!parent) return GetLocalMatrix();
-
-    glm::mat4  globalMatrix = glm::mat4(1);
-    Transform *tmp          = this;
-
-    // ummm... yeah, this will be changed eventually
-    // it's the first iterative solution I came up with..
-    // turns out it is VERY terrible, not actually using it
-    std::list<Transform *> hierarchy;
-    while (tmp->parent) {
-        tmp = tmp->parent;
-        hierarchy.push_front(tmp);
-    }
-
-    for (auto &&i : hierarchy) {
-        globalMatrix *= i->GetLocalMatrix();
-    }
-    globalMatrix *= this->GetLocalMatrix();
-
-    return globalMatrix;
-}
 
 
 struct Input
@@ -217,7 +173,6 @@ struct Swapchain
 {
     VkSwapchainKHR _handle = VK_NULL_HANDLE;
 
-    // note: do these always come together?
     std::vector<VkImage>     _images      = {};
     std::vector<VkImageView> _image_views = {};
     VkFormat                 _format;
@@ -280,7 +235,7 @@ VkDescriptorSetLayout        gDraw_data_set_layout;
 std::vector<VkDescriptorSet> gMaterial_data_sets;
 VkDescriptorSetLayout        gMaterial_data_set_layout;
 
-const uint32_t                     MAX_TEXTURE_COUNT = 1024;
+const uint32_t                     MAX_TEXTURE_COUNT = 128;
 uint32_t                           textures_count    = 0;
 VkDescriptorSet                    gBindless_textures_set;
 VkDescriptorSetLayout              gBindless_textures_set_layout;
@@ -641,6 +596,7 @@ bool VulkanInit()
         // gpu_vulkan_11_features.pNext = &robustness_feature_ext;
         const char *enabled_device_extension_names[] = {
             VK_KHR_SWAPCHAIN_EXTENSION_NAME,
+            VK_KHR_SHADER_DRAW_PARAMETERS_EXTENSION_NAME,
             // VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME, // core in 1.3
             // VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME, // core in 1.3
             // VK_KHR_SHADER_NON_SEMANTIC_INFO_EXTENSION_NAME,
@@ -773,10 +729,10 @@ bool VulkanInit()
         // we are creating a pool that can potentially hold 16 descriptor sets that hold swapchain.image_count number of uniform buffer descriptors
         VkDescriptorPoolSize descriptor_pool_sizes[2] {};
         descriptor_pool_sizes[0].type            = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-        descriptor_pool_sizes[0].descriptorCount = gSwapchain._image_count; // total amount of a given descriptor type accross all sets
+        descriptor_pool_sizes[0].descriptorCount = gSwapchain._image_count * 2; // total amount of a given descriptor type accross all sets
 
         descriptor_pool_sizes[1].type            = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-        descriptor_pool_sizes[1].descriptorCount = gSwapchain._image_count * 2; // total amount of a given descriptor type accross all sets
+        descriptor_pool_sizes[1].descriptorCount = gSwapchain._image_count * 4; // total amount of a given descriptor type accross all sets
 
 
         VkDescriptorPoolCreateInfo descriptor_pool_ci {};
@@ -908,7 +864,7 @@ bool VulkanInit()
 
                 vmaMapMemory(gAllocator, gFrames[i].view_proj_uniforms.vma_allocation, &mapped_view_proj_ptrs[i]);
 
-                CreateBuffer(&gFrames[i].draw_data_ssbo, sizeof(DrawDataSSBO) * MAX_RENDER_ENTITIES,
+                CreateBuffer(&gFrames[i].draw_data_ssbo, sizeof(ObjectData) * MAX_RENDER_ENTITIES,
                     VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
                     VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT,
                     VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE);
@@ -946,7 +902,7 @@ bool VulkanInit()
                 VkDescriptorBufferInfo buffer_info {};
                 buffer_info.buffer = gFrames[i].draw_data_ssbo.handle;
                 buffer_info.offset = 0;
-                buffer_info.range  = sizeof(DrawDataSSBO) * MAX_RENDER_ENTITIES;
+                buffer_info.range  = sizeof(ObjectData) * MAX_RENDER_ENTITIES;
 
                 VkWriteDescriptorSet descriptor_writes {};
                 descriptor_writes.sType      = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
@@ -1309,7 +1265,7 @@ static void CreateGraphicsPipeline(VkDevice device, VkPipeline *pipeline)
     //
     // Vertex input state - Non-interleaved, so we must bind each vertex attribute to a different slot
     //
-    const int                       BINDING_COUNT = 4;
+    const int                       BINDING_COUNT = 6;
     VkVertexInputBindingDescription vertex_binding_descriptions[BINDING_COUNT] { 0 };
     vertex_binding_descriptions[0].binding   = 0; // corresponds to vkCmdBindVertexBuffer(binding)
     vertex_binding_descriptions[0].stride    = sizeof(float) * 3;
@@ -1327,8 +1283,16 @@ static void CreateGraphicsPipeline(VkDevice device, VkPipeline *pipeline)
     vertex_binding_descriptions[3].stride    = sizeof(float) * 2;
     vertex_binding_descriptions[3].inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
 
+    vertex_binding_descriptions[4].binding   = 4; // corresponds to vkCmdBindVertexBuffer(binding)
+    vertex_binding_descriptions[4].stride    = sizeof(uint8_t) * 4;
+    vertex_binding_descriptions[4].inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
 
-    const int                         ATTRIB_COUNT = 4;
+    vertex_binding_descriptions[5].binding   = 5; // corresponds to vkCmdBindVertexBuffer(binding)
+    vertex_binding_descriptions[5].stride    = sizeof(float) * 4;
+    vertex_binding_descriptions[5].inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+
+
+    const int                         ATTRIB_COUNT = 6;
     VkVertexInputAttributeDescription vertex_attrib_descriptions[ATTRIB_COUNT] { 0 };
     vertex_attrib_descriptions[0].location = 0;
     vertex_attrib_descriptions[0].binding  = 0;
@@ -1349,6 +1313,16 @@ static void CreateGraphicsPipeline(VkDevice device, VkPipeline *pipeline)
     vertex_attrib_descriptions[3].binding  = 3;
     vertex_attrib_descriptions[3].format   = VK_FORMAT_R32G32_SFLOAT;
     vertex_attrib_descriptions[3].offset   = 0;
+
+    vertex_attrib_descriptions[4].location = 4;
+    vertex_attrib_descriptions[4].binding  = 4;
+    vertex_attrib_descriptions[4].format   = VK_FORMAT_R8G8B8A8_UNORM;
+    vertex_attrib_descriptions[4].offset   = 0;
+
+    vertex_attrib_descriptions[5].location = 5;
+    vertex_attrib_descriptions[5].binding  = 5;
+    vertex_attrib_descriptions[5].format   = VK_FORMAT_R32G32B32A32_SFLOAT;
+    vertex_attrib_descriptions[5].offset   = 0;
 
     VkPipelineVertexInputStateCreateInfo vertex_input_state_ci {};
     vertex_input_state_ci.sType                           = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;

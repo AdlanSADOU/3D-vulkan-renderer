@@ -34,7 +34,7 @@ set LIB_PATHS=%SDL2% %GLEW% %VULKAN%
 
 
 set LINKED_LIBS= shell32.lib OpenGL32.lib glew32.lib SDL2main.lib SDL2.lib vulkan-1.lib
-set LINKER_FLAGS=/link %LIB_PATHS% %LINKED_LIBS% /SUBSYSTEM:WINDOWS /INCREMENTAL /TIME+
+set LINKER_FLAGS=/link %LIB_PATHS% %LINKED_LIBS% /SUBSYSTEM:CONSOLE /INCREMENTAL /TIME+
 
 if not exist build (mkdir build)
 pushd build

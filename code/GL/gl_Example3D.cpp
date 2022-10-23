@@ -59,7 +59,7 @@ void Example3DInit()
 
 
 
-    entities.resize(1024);
+    entities.resize(1);
     for (size_t i = 0; i < entities.size(); i++) {
         static float z = 0;
         static float x = 0;
@@ -79,9 +79,9 @@ void Example3DInit()
             // then the following line will crash
             entities[i].model._transform.translation = { startingOffset + x * distanceFactor, 0.f, startingOffset + z * distanceFactor };
             entities[i].model._transform.rotation    = glm::quat({ 0, 0, 0 });
-            entities[i].model._transform.scale       = glm::vec3(10.0f);
-            // entities[i].model._current_animation     = &entities[i].model._animations[0];
-            // entities[i].model._should_play_animation = true;
+            entities[i].model._transform.scale       = glm::vec3(.10f);
+            entities[i].model._current_animation     = &entities[i].model._animations[0];
+            entities[i].model._should_play_animation = true;
         } else {
             // entities[i].model.Create("assets/warrior/warrior.gltf"); // fixme: if for some reason this fails to load
             // then the following line will crash
@@ -161,7 +161,7 @@ void Example3DUpdateDraw(float dt, Input input)
     // glMultiDrawElementsIndirect()
 
     for (size_t i = 0; i < entities.size(); i++) {
-        // entities[i].model.AnimationUpdate(dt);
+        entities[i].model.AnimationUpdate(dt);
         entities[i].model.Draw(dt);
     }
 }
