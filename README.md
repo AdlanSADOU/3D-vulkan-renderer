@@ -3,16 +3,14 @@
 ## Preview
 ![](https://github.com/AdlanSADOU/3D-Renderer/blob/main/.misc/preview.gif)
 
-Starting from August 2022, after obtaining my bachelor in IT I decided to take a year off to implement what sould resemble a game engine. 
-The main goal is to get as much as possible hands on experience on some aspects and systems that are part of a 3D Engine.
+Starting from August 2022, after obtaining my bachelor in IT I decided to take a year off to implement a 3D game from scratch(almost). 
+The main goal is to get as much as possible hands on experience on some aspects and systems that are part of 3D game technologies.
 
 ## Current Features
-- [x] Basic Mesh Rendering
+- [x] Mesh Rendering
 - [x] Skinned Animation
-- [x] Basic shader abstraction
-    - Single file vertex/fragment shaders...
-- [ ] Lighting
-- [ ] Materials
+- [x] Lighting
+- [x] Materials
 - [ ] Font Rendering
 - [ ] Immediate GUI
 - [ ] Retained GUI
