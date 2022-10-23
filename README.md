@@ -15,7 +15,8 @@ The main goal is to get as much as possible hands on experience on some aspects 
 - [ ] Immediate GUI
 - [ ] Retained GUI
 
-Currently using OpenGL.
+Currently using ~~OpenGL~~ Vulkan 1.3
+
 
 ## Third party libraries
 
