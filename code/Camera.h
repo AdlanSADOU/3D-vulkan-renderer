@@ -18,12 +18,12 @@ struct Camera
     float     _aspect      = {};
     float     _near        = {};
     float     _far         = {};
-    float     _speed       = 120.f;
+    float     _speed       = 60.f;
     float     _sensitivity = .046f;
 
 
     void CameraCreate(glm::vec3 position, float fov, float aspect, float near, float far);
-    void CameraUpdate(Input &input, float dt);
+    void CameraUpdate(Input *input, float dt);
 };
 static Camera *gCameraInUse;
 
@@ -40,20 +40,20 @@ void Camera::CameraCreate(glm::vec3 position, float fov, float aspect, float nea
     _position = position;
 
     _at         = _position + _forward;
-    _projection = glm::perspective(Radians(_fov), _aspect, _near, _far);
+    _projection = glm::perspective(glm::radians(_fov), _aspect, _near, _far);
     _view       = glm::lookAt(_position, _at, _up);
 }
 
-void Camera::CameraUpdate(Input &input, float dt)
+void Camera::CameraUpdate(Input *input, float dt)
 {
-    if (input.up) _position += _forward * _speed * dt;
-    if (input.down) _position -= _forward * _speed * dt;
-    if (input.left) _position -= glm::normalize(glm::cross(_forward, _up)) * _speed * dt;
-    if (input.right) _position += glm::normalize(glm::cross(_forward, _up)) * _speed * dt;
+    if (input->up) _position += _forward * _speed * dt;
+    if (input->down) _position -= _forward * _speed * dt;
+    if (input->left) _position -= glm::normalize(glm::cross(_forward, _up)) * _speed * dt;
+    if (input->right) _position += glm::normalize(glm::cross(_forward, _up)) * _speed * dt;
 
     float factor = 0;
-    if (input.E) factor -= 1.f;
-    if (input.Q) factor += 1.f;
+    if (input->E) factor -= 1.f;
+    if (input->Q) factor += 1.f;
     _position.y += factor * dt / _sensitivity;
 
     static float xrelPrev = 0;
@@ -62,7 +62,7 @@ void Camera::CameraUpdate(Input &input, float dt)
     int          yrel;
 
     SDL_GetRelativeMouseState(&xrel, &yrel);
-    if (input.mouse.right) {
+    if (input->mouse.right) {
         SDL_SetRelativeMouseMode(SDL_TRUE);
 
         if (xrelPrev != xrel) _yaw += (float)xrel * _sensitivity;
@@ -70,9 +70,9 @@ void Camera::CameraUpdate(Input &input, float dt)
     } else
         SDL_SetRelativeMouseMode(SDL_FALSE);
 
-    _forward.x = cosf(Radians(_yaw)) * cosf(Radians(_pitch));
-    _forward.y = sinf(Radians(_pitch));
-    _forward.z = sinf(Radians(_yaw)) * cosf(Radians(_pitch));
+    _forward.x = cosf(glm::radians(_yaw)) * cosf(glm::radians(_pitch));
+    _forward.y = sinf(glm::radians(_pitch));
+    _forward.z = sinf(glm::radians(_yaw)) * cosf(glm::radians(_pitch));
     _forward   = glm::normalize(_forward);
     xrelPrev   = xrel;
     yrelPrev   = yrel;

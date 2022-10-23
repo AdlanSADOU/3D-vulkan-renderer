@@ -1,2 +1,2 @@
-#pragma once
-#define GL 1
+#define VULKAN
+// #define GL

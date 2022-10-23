@@ -1,6 +1,5 @@
 #include "backend.h"
 
-#if defined(GL) && !defined(VULKAN)
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -64,6 +63,7 @@ float          dt                         = 0;
 
 // note(ad): if we want to make this into a "framework"
 // we must provide init and shutdown
+#if defined(GL) && !defined(VULKAN)
 extern int main(int argc, char **argv)
 {
     if (SDL_Init(SDL_INIT_EVERYTHING)) {

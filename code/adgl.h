@@ -29,7 +29,6 @@
 #include <math.h>
 #include <assert.h>
 
-#include "utils.h"
 
 struct Texture;
 struct Material;
@@ -41,7 +40,7 @@ static std::unordered_map<std::string, Shader *>   gShaders;
 static std::unordered_map<std::string, Material *> gMaterials;
 static std::unordered_map<std::string, void *>     gSharedMeshes;
 
-#define NB_OF_ELEMENTS_IN_ARRAY(arr) (sizeof(arr) / sizeof(arr[0]))
+#define ARR_COUNT(arr) (sizeof(arr) / sizeof(arr[0]))
 
 static void printVec(const char *name, glm::vec3 v)
 {
@@ -108,8 +107,6 @@ struct Input
         bool    right;
     } mouse;
 };
-
-
 
 void ExampleSPriteInit();
 void ExampleSpriteUpdateDraw(float dt, Input input);

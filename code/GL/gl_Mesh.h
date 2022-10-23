@@ -31,59 +31,59 @@ static Material *MaterialCreate(const char *shaderPath, Texture *texture)
     return m;
 }
 
-struct TranslationChannel
-{
-    float     *timestamps;
-    glm::vec3 *translations;
-};
-struct RotationChannel
-{
-    float     *timestamps;
-    glm::quat *rotations;
-};
-struct ScaleChannel
-{
-    float     *timestamps;
-    glm::vec3 *scales;
-};
+// struct TranslationChannel
+// {
+//     float     *timestamps;
+//     glm::vec3 *translations;
+// };
+// struct RotationChannel
+// {
+//     float     *timestamps;
+//     glm::quat *rotations;
+// };
+// struct ScaleChannel
+// {
+//     float     *timestamps;
+//     glm::vec3 *scales;
+// };
 
-struct Sample
-{
-    uint8_t            target_joint;
-    TranslationChannel translation_channel;
-    RotationChannel    rotation_channel;
-    ScaleChannel       scale_channel;
-};
+// struct Sample
+// {
+//     uint8_t            target_joint;
+//     TranslationChannel translation_channel;
+//     RotationChannel    rotation_channel;
+//     ScaleChannel       scale_channel;
+// };
 
-struct Joint
-{
-    char     *name;
-    int8_t    parent; // 128 max joints!!
-    glm::mat4 inv_bind_matrix;
-    glm::mat4 global_joint_matrix;
-};
+// struct Joint
+// {
+//     char     *name;
+//     int8_t    parent; // 128 max joints!!
+//     glm::mat4 inv_bind_matrix;
+//     glm::mat4 global_joint_matrix;
+// };
 
-struct AnimationV2
-{
-    float               duration;
-    std::vector<Sample> samples;
-};
+// struct AnimationV2
+// {
+//     float               duration;
+//     std::vector<Sample> samples;
+// };
 
 
-AnimationV2 animation;
+// AnimationV2 animation;
 
-struct Animation
-{
-    void       *handle      = {};
-    const char *name        = {};
-    float       duration    = {};
-    float       globalTimer = {};
-    bool        isPlaying {};
+// struct Animation
+// {
+//     void       *handle      = {};
+//     const char *name        = {};
+//     float       duration    = {};
+//     float       globalTimer = {};
+//     bool        isPlaying {};
 
-    std::vector<Joint> _joints;
+//     std::vector<Joint> _joints;
 
-    std::vector<glm::mat4> joint_matrices;
-};
+//     std::vector<glm::mat4> joint_matrices;
+// };
 
 struct MeshData
 {
@@ -111,6 +111,7 @@ struct SkinnedModel
     char *assetFolder = {};
 
     std::vector<skinnedMesh> _meshes = {};
+
     std::vector<Animation>   _animations;
     Animation               *_current_animation     = {};
     bool                     _should_play_animation = true;
@@ -182,22 +183,8 @@ void SkinnedModel::Create(const char *path)
         _mesh_data.ptr = gSharedMeshes[path];
 
     } else {
-        cgltf_data   *data;
-        cgltf_options options = {};
-        cgltf_result  result  = cgltf_parse_file(&options, path, &data);
-
-        if (cgltf_parse_file(&options, path, &data) == cgltf_result_success) {
-            if (cgltf_load_buffers(&options, data, path) == cgltf_result_success) {
-                if ((result = cgltf_validate(data)) != cgltf_result_success) {
-                    SDL_Log("cgltf validation error");
-                    return;
-                }
-                result = cgltf_load_buffers(&options, data, path);
-            }
-        } else {
-            SDL_Log("Failed to load [%s]", path);
-            return;
-        }
+        cgltf_data *data;
+        LoadCgltfData(path, &data);
 
         gSharedMeshes.insert({ std::string(path), (void *)data });
         _mesh_data.ptr = (void *)data;
@@ -516,4 +503,40 @@ void SkinnedModel::AnimationUpdate(float dt)
 
         anim->joint_matrices[joint_idx] = anim->_joints[joint_idx].global_joint_matrix * anim->_joints[joint_idx].inv_bind_matrix;
     } // End of Joints loop
+}
+
+// note: this is unsued right now
+std::vector<Transform> bindPoseLocalJointTransforms;
+static void            ComputeLocalJointTransforms(cgltf_data *data)
+{
+    cgltf_node **joints = data->skins->joints;
+    bindPoseLocalJointTransforms.resize(data->skins->joints_count);
+
+    for (size_t joint_idx = 0; joint_idx < data->skins->joints_count; joint_idx++) {
+        bindPoseLocalJointTransforms[joint_idx].translation = *(glm::vec3 *)joints[joint_idx]->translation;
+        glm::vec3 R                                         = glm::eulerAngles(*(glm::quat *)joints[joint_idx]->rotation);
+        bindPoseLocalJointTransforms[joint_idx].rotation    = R;
+        bindPoseLocalJointTransforms[joint_idx].scale       = glm::vec3(1);
+
+        bindPoseLocalJointTransforms[joint_idx].name = joints[joint_idx]->name;
+
+        if (joint_idx == 0) continue;
+
+        if (joints[joint_idx]->parent == joints[joint_idx - 1]) {
+            bindPoseLocalJointTransforms[joint_idx].parent       = &bindPoseLocalJointTransforms[joint_idx - 1];
+            bindPoseLocalJointTransforms[joint_idx].parent->name = bindPoseLocalJointTransforms[joint_idx - 1].name;
+
+            bindPoseLocalJointTransforms[joint_idx - 1].child       = &bindPoseLocalJointTransforms[joint_idx];
+            bindPoseLocalJointTransforms[joint_idx - 1].child->name = bindPoseLocalJointTransforms[joint_idx].name;
+        } else {
+            // find index of parent joint
+            auto currentJointParent = joints[joint_idx]->parent;
+            for (size_t i = 0; i < data->skins->joints_count; i++) {
+                if (joints[i] == currentJointParent) {
+                    bindPoseLocalJointTransforms[joint_idx].parent       = &bindPoseLocalJointTransforms[i];
+                    bindPoseLocalJointTransforms[joint_idx].parent->name = bindPoseLocalJointTransforms[i].name;
+                }
+            }
+        }
+    }
 }
