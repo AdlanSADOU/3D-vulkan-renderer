@@ -20,7 +20,7 @@ static void LoadTexture(int32_t *texture_idx, const char *texture_uri, const cha
 struct SkinnedModel
 {
     std::vector<Joint>       _joints;
-    std::vector<AnimationV2> _animations_v2;
+    // std::vector<AnimationV2> _animations_v2;
     std::vector<Animation>   _animations;
     Animation               *_current_animation     = {};
     bool                     _should_play_animation = true;
