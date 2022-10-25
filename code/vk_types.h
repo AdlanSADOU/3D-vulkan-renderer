@@ -91,3 +91,21 @@ glm::mat4 Transform::ComputeGlobalMatrix()
 
     return globalMatrix;
 }
+
+struct Input
+{
+    bool up;
+    bool down;
+    bool left;
+    bool right;
+    bool Q;
+    bool E;
+
+    struct Mouse
+    {
+        int32_t xrel;
+        int32_t yrel;
+        bool    left;
+        bool    right;
+    } mouse;
+};

@@ -1,30 +1,17 @@
-// #define VMA_IMPLEMENTATION
-#define _VMA_PUBLIC_INTERFACE
-
-#if !defined(CGLTF_IMPLEMENTATION)
-#define CGLTF_IMPLEMENTATION
-#endif
-
-#if !defined(STB_IMAGE_IMPLEMENTATION)
-#define STB_IMAGE_IMPLEMENTATION
-#endif
-
-#define GLM_FORCE_DEPTH_ZERO_TO_ONE
-
 #include "vk_backend.h"
 
 #if defined(VULKAN) && !defined(GL)
 
+#include "animation.cpp"
+#include "vk_texture.cpp"
+#include "vk_mesh.cpp"
 
-#include "utils.h"
-#include "vk_Mesh.h"
-#include "Camera.h"
 
 Camera camera {};
 
 struct Entity
 {
-    SkinnedModel model;
+    Mesh model;
     Transform    _transform;
 
     int32_t draw_data_idx;
@@ -42,13 +29,16 @@ extern int main(int argc, char **argv)
     gActive_camera = &camera;
 
 
-    entities.resize(2);
+    gSharedSkinnedModel.insert({ "warrior", new Mesh("assets/warrior/warrior.gltf") });
+    gSharedSkinnedModel.insert({ "terrain", new Mesh("assets/terrain/terrain.gltf") });
+
+    entities.resize(256*2);
     for (size_t i = 0; i < entities.size(); i++) {
         static float z = 0;
         static float x = 0;
 
         int   distanceFactor      = 22;
-        int   max_entities_on_row = 6;
+        int   max_entities_on_row = 32;
         float startingOffset      = 0.f;
 
         if (i > 0) x++;
@@ -57,9 +47,8 @@ extern int main(int argc, char **argv)
             z++;
         }
 
-
         if (i == 0) {
-            entities[i].model.Create("assets/warrior/warrior.gltf"); // fixme: if for some reason this fails to load
+            entities[i].model = *gSharedSkinnedModel["warrior"];
             // then the following line will crash
             entities[i]._transform.translation = { startingOffset + x * distanceFactor, 0.f, startingOffset + z * distanceFactor };
             entities[i]._transform.rotation    = glm::quat({ 0, 0, 0 });
@@ -69,7 +58,7 @@ extern int main(int argc, char **argv)
             entities[i].model._current_animation     = &entities[i].model._animations[0];
             entities[i].model._should_play_animation = true;
         } else if (i == 1) {
-            entities[i].model.Create("assets/terrain/terrain.gltf"); // fixme: if for some reason this fails to load
+            entities[i].model = *gSharedSkinnedModel["terrain"];
             // then the following line will crash
             entities[i]._transform.translation                     = { startingOffset + x * distanceFactor, 0.f, startingOffset + z * distanceFactor };
             entities[i]._transform.rotation                        = glm::quat({ 0, 0, 0 });
@@ -79,17 +68,13 @@ extern int main(int argc, char **argv)
             entities[i].model._meshes[0].material_data[0].tiling_y = 10;
 
         } else {
-            // entities[i].model.Create("assets/warrior/warrior.gltf"); // fixme: if for some reason this fails to load
+            entities[i].model = *gSharedSkinnedModel["warrior"];
             // then the following line will crash
-            entities[i].model._meshes                  = entities[0].model._meshes;
-            entities[i].model._mesh_data               = entities[0].model._mesh_data;
-            entities[i].model.vertex_buffer            = entities[0].model.vertex_buffer;
-            entities[i].model.vertex_buffer_allocation = entities[0].model.vertex_buffer_allocation;
+            entities[i]._transform.translation = { startingOffset + x * distanceFactor, 0.f, startingOffset + z * distanceFactor };
+            entities[i]._transform.rotation    = glm::quat({ 0, 0, 0 });
+            entities[i]._transform.scale       = glm::vec3(.10f);
+            entities[i].draw_data_idx          = i;
 
-            entities[i]._transform.translation       = { startingOffset + x * distanceFactor, 0.f, startingOffset + z * distanceFactor };
-            entities[i]._transform.rotation          = glm::quat({ 0, 0, 0 });
-            entities[i]._transform.scale             = glm::vec3(10.0f);
-            entities[i].draw_data_idx                = i;
             entities[i].model._current_animation     = &entities[i].model._animations[0];
             entities[i].model._should_play_animation = true;
         }
@@ -313,7 +298,7 @@ extern int main(int argc, char **argv)
                         constants.draw_data_idx = entities[i].draw_data_idx;
 
                         if (entities[i].model._current_animation) {
-                            entities[i].model.AnimationUpdate(dt);
+                            AnimationUpdate(&entities[i].model, dt);
 
                             constants.has_joints = 1;
                             auto joint_matrices  = entities[i].model._current_animation->joint_matrices;
@@ -325,7 +310,7 @@ extern int main(int argc, char **argv)
 
                         vkCmdPushConstants(graphics_cmd_buffer, gDefault_graphics_pipeline_layout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(PushConstants), &constants);
 
-                        entities[i].model.Draw(graphics_cmd_buffer, frame_in_flight);
+                        Draw(&entities[i].model, graphics_cmd_buffer, frame_in_flight);
                     }
                 }
                 //////////////////////////////////////////////
