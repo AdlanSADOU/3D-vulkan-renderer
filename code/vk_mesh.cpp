@@ -1,5 +1,5 @@
 
-Mesh::Mesh(const char *path)
+void Mesh::Create(const char *path)
 {
     if (gCgltfData.contains(path)) {
         _mesh_data = (cgltf_data *)gCgltfData[path];
@@ -10,6 +10,11 @@ Mesh::Mesh(const char *path)
 
         gCgltfData.insert({ std::string(path), (void *)data });
         _mesh_data = data;
+    }
+
+    if (gSharedMesh.contains(path)) {
+        SDL_Log("Mesh is already cached : %s", path);
+        return;
     }
 
     char *folder_path;
@@ -126,6 +131,7 @@ Mesh::Mesh(const char *path)
         mesh->id = global_instance_id++;
     }
 
+    gSharedMesh.insert({ "assets/warrior/warrior.gltf", this });
 
 
     //
@@ -242,10 +248,9 @@ Mesh::Mesh(const char *path)
     //         } // End of channels loop for the current joint
     //     } // End of Joints loop
     // }
-
 }
 
-void Draw(const Mesh *model, VkCommandBuffer command_buffer, uint32_t frame_in_flight)
+void Draw(const Mesh *model)
 {
     VkBuffer buffers[6];
 
@@ -292,11 +297,21 @@ void Draw(const Mesh *model, VkCommandBuffer command_buffer, uint32_t frame_in_f
             //     /*WEIGHTS_0 */ offsets[5] = 0;
             // }
 
-            ((MaterialData *)mapped_material_data_ptrs[frame_in_flight])[model->_meshes[mesh_idx].id] = model->_meshes[mesh_idx].material_data[submesh_idx];
+            ((MaterialData *)mapped_material_data_ptrs[gFrame_in_flight])[model->_meshes[mesh_idx].id] = model->_meshes[mesh_idx].material_data[submesh_idx];
 
-            vkCmdBindVertexBuffers(command_buffer, 0, ARR_COUNT(buffers), buffers, offsets);
-            vkCmdBindIndexBuffer(command_buffer, model->vertex_buffer, model->_meshes[mesh_idx].index_offset[submesh_idx], VK_INDEX_TYPE_UINT16);
-            vkCmdDrawIndexed(command_buffer, model->_meshes[mesh_idx].index_count[submesh_idx], 1, 0, 0, model->_meshes[mesh_idx].id);
+            vkCmdBindVertexBuffers(gGraphics_cmd_buffer_in_flight, 0, ARR_COUNT(buffers), buffers, offsets);
+            vkCmdBindIndexBuffer(gGraphics_cmd_buffer_in_flight, model->vertex_buffer, model->_meshes[mesh_idx].index_offset[submesh_idx], VK_INDEX_TYPE_UINT16);
+            vkCmdDrawIndexed(gGraphics_cmd_buffer_in_flight, model->_meshes[mesh_idx].index_count[submesh_idx], 1, 0, 0, model->_meshes[mesh_idx].id);
         }
     }
+}
+
+
+
+
+glm::mat4 Transform::GetLocalMatrix()
+{
+    return glm::translate(glm::mat4(1), translation)
+        * glm::toMat4(rotation)
+        * glm::scale(glm::mat4(1), scale);
 }

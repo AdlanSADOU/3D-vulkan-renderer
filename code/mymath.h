@@ -329,3 +329,46 @@ static Matrix4 LookAt(Vector3 eye, Vector3 at, Vector3 up)
 
     return lookat;
 }
+
+
+
+
+
+float Interpolate(float a, float b, float t)
+{
+    return a + (b - a) * t;
+}
+Vector3 Interpolate(Vector3 a, Vector3 b, float t)
+{
+    // return a + (b - a) * t;
+    return {
+        a.x + (b.x - a.x) * t,
+        a.y + (b.y - a.y) * t,
+        a.z + (b.z - a.z) * t
+    };
+}
+
+// void Slerp(glm::quat q1, glm::quat q2, glm::quat &qr, float lambda)
+// {
+//     float dotproduct = q1.x * q2.x + q1.y * q2.y + q1.z * q2.z + q1.w * q2.w;
+//     float theta, st, sut, sout, coeff1, coeff2;
+
+//     // algorithm adapted from Shoemake's paper
+//     lambda = lambda / 2.0;
+
+//     theta = (float)acos(dotproduct);
+//     if (theta < 0.0) theta = -theta;
+
+//     st     = (float)sin(theta);
+//     sut    = (float)sin(lambda * theta);
+//     sout   = (float)sin((1 - lambda) * theta);
+//     coeff1 = sout / st;
+//     coeff2 = sut / st;
+
+//     qr.x = coeff1 * q1.x + coeff2 * q2.x;
+//     qr.y = coeff1 * q1.y + coeff2 * q2.y;
+//     qr.z = coeff1 * q1.z + coeff2 * q2.z;
+//     qr.w = coeff1 * q1.w + coeff2 * q2.w;
+
+//     qr = glm::normalize(qr);
+// }

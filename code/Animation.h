@@ -39,7 +39,6 @@ struct AnimationV2
 };
 
 
-AnimationV2 animation;
 
 struct Animation
 {
@@ -53,3 +52,7 @@ struct Animation
 
     std::vector<glm::mat4> joint_matrices;
 };
+
+
+struct Mesh;
+void AnimationUpdate(const Mesh *model, float dt);

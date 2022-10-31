@@ -3,6 +3,20 @@
 */
 static uint32_t global_instance_id = 0;
 
+struct MaterialData
+{
+    int32_t   base_color_texture_idx         = -1;
+    int32_t   emissive_texture_idx           = -1;
+    int32_t   normal_texture_idx             = -1;
+    int32_t   metallic_roughness_texture_idx = -1;
+    float     tiling_x                       = 1.f;
+    float     tiling_y                       = 1.f;
+    float     metallic_factor;
+    float     roughness_factor;
+    glm::vec4 base_color_factor;
+};
+
+struct cgltf_data;
 
 struct Mesh
 {
@@ -18,6 +32,7 @@ struct Mesh
     VkBuffer      vertex_buffer;
     VmaAllocation vertex_buffer_allocation;
     cgltf_data   *_mesh_data;
+
     struct SkinnedMesh
     {
         uint32_t id;
@@ -37,8 +52,7 @@ struct Mesh
     };
     std::vector<SkinnedMesh> _meshes;
 
-    Mesh(const char *path);
-    Mesh(){};
+    void Create(const char *path);
 };
 
-void Draw(const Mesh *model, VkCommandBuffer command_buffer, uint32_t frame_in_flight);
+void Draw(const Mesh *model);

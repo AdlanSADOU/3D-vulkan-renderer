@@ -3,6 +3,9 @@
 if %1 == Debug (
         echo %1
         set COMPILER_FLAGS= -FC -GR- -EHa- -EHsc -EHs -nologo -Zi -Zf -MP -std:c++latest /MTd /Ob1
+) ELSE IF %1 == Debug_fast (
+        echo %1
+        set COMPILER_FLAGS= -FC -GR- -EHa- -EHsc -EHs -nologo -std:c++latest /MT /Ob1 /O2 -Zi -Zf -MP
 ) ELSE IF %1 == Release (
         echo %1
         set COMPILER_FLAGS= -FC -GR- -EHa- -EHsc -EHs -nologo -std:c++latest /MT /O2
@@ -40,7 +43,7 @@ if not exist build (mkdir build)
 pushd build
 
 @REM cl %COMPILER_FLAGS% %INCLUDES% /Fe:prog.exe ../code/*.cpp ../code/GL/*.cpp  %LINKER_FLAGS%
-cl %COMPILER_FLAGS% %INCLUDES% /Fe:prog.exe ../code/vk_backend.cpp ../code/vk_mem_alloc.cpp %LINKER_FLAGS%
+cl %COMPILER_FLAGS% %INCLUDES% /Fe:prog.exe ../code/vk_backend.cpp ../code/vk_mem_alloc.cpp ../code/Game/game_entry.cpp %LINKER_FLAGS%
 
 popd
 
