@@ -1,5 +1,13 @@
 
 
+#define STB_IMAGE_IMPLEMENTATION
+#include <stb_image.h>
+#define GLM_FORCE_DEPTH_ZERO_TO_ONE
+#define _VMA_PUBLIC_INTERFACE
+#define CGLTF_IMPLEMENTATION
+#include "vk_renderer.h"
+#include "common.h"
+
 #include <vector>
 #include <unordered_map>
 #include <stdlib.h>
@@ -7,15 +15,8 @@
 
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_vulkan.h>
+#include <ktxvulkan.h>
 
-#include "common.h"
-
-#define STB_IMAGE_IMPLEMENTATION
-#include <stb_image.h>
-#define GLM_FORCE_DEPTH_ZERO_TO_ONE
-#define _VMA_PUBLIC_INTERFACE
-#define CGLTF_IMPLEMENTATION
-#include "vk_renderer.h"
 
 #pragma warning(disable: 6011)
 
@@ -37,7 +38,7 @@ Camera* gActive_camera = NULL;
 
 ////////////// Engine Interface ///////////////////
 VkResult CreateBuffer(Buffer* buffer, VkDeviceSize size, VkBufferUsageFlags buffer_usage, VmaAllocationCreateFlags allocation_flags, VmaMemoryUsage memory_usage);
-void     TransitionImageLayout(VkCommandBuffer command_buffer, VkImage image, VkImageLayout old_layout, VkImageLayout new_layout, bool is_depth);
+void     TransitionImageLayout(VkCommandBuffer command_buffer, VkImage image, VkImageLayout old_layout, VkImageLayout new_layout, VkImageSubresourceRange subresource_range, bool is_depth);
 void     CreateGraphicsPipeline(VkDevice device, VkPipeline* pipeline);
 
 ////////////////////////////
@@ -277,7 +278,7 @@ void LoadAndCacheTexture(int32_t* texture_idx, const char* texture_uri, const ch
     Texture* t = (Texture*)malloc(sizeof(Texture));
     assert(t != NULL);
 
-    t->Create(full_path.c_str(), false);
+    t->Create(full_path.c_str());
     t->name = _strdup(texture_uri);
 
     gTextures.insert({ std::string(texture_uri), t });
@@ -286,7 +287,7 @@ void LoadAndCacheTexture(int32_t* texture_idx, const char* texture_uri, const ch
 }
 
 uint32_t gTextures_count = 0;
-void Texture::Create(const char* filepath, bool is_cubemap)
+void Texture::Create(const char* filepath)
 {
     // note: right now we assume ONE array of textures for all textures in the game because we are using the globals 
     // - gDescriptor_image_infos
@@ -307,18 +308,32 @@ void Texture::Create(const char* filepath, bool is_cubemap)
 
     size_t imageSize = static_cast<size_t>(tex_width) * tex_height * 4;
 
-    width = tex_width;
-    height = tex_height;
+    width = (uint32_t)tex_width;
+    height = (uint32_t)tex_height;
     num_channels = texChannels;
     format = VK_FORMAT_R8G8B8A8_UNORM;
 
 
 
+
+
+    Buffer staging_buffer;
+    VKCHECK(CreateBuffer(&staging_buffer, imageSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_ALLOCATION_CREATE_MAPPED_BIT, VMA_MEMORY_USAGE_CPU_ONLY));
+
+    void* staging_data;
+    vmaMapMemory(gAllocator, staging_buffer.vma_allocation, &staging_data);
+    assert(pixels);
+    memcpy(staging_data, pixels, imageSize);
+    vmaFlushAllocation(gAllocator, staging_buffer.vma_allocation, 0, VK_WHOLE_SIZE);
+    vmaUnmapMemory(gAllocator, staging_buffer.vma_allocation);
+
+    stbi_image_free(pixels);
+
     VkImageCreateInfo ci_image = {};
     ci_image.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
     ci_image.imageType = VK_IMAGE_TYPE_2D;
     ci_image.format = VK_FORMAT_R8G8B8A8_UNORM;
-    ci_image.extent = { (uint32_t)width, (uint32_t)height, 1 };
+    ci_image.extent = { width, height, 1 };
     ci_image.mipLevels = 1;
     ci_image.arrayLayers = 1;
     ci_image.samples = VK_SAMPLE_COUNT_1_BIT;
@@ -342,60 +357,23 @@ void Texture::Create(const char* filepath, bool is_cubemap)
     VKCHECK(vkCreateImageView(gDevice, &ci_image_view, NULL, &view));
 
 
-    Buffer staging_buffer;
-    VKCHECK(CreateBuffer(&staging_buffer, imageSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_ALLOCATION_CREATE_MAPPED_BIT, VMA_MEMORY_USAGE_CPU_ONLY));
-
-    void* staging_data;
-    vmaMapMemory(gAllocator, staging_buffer.vma_allocation, &staging_data);
-    assert(pixels);
-    memcpy(staging_data, pixels, imageSize);
-    vmaFlushAllocation(gAllocator, staging_buffer.vma_allocation, 0, VK_WHOLE_SIZE);
-    vmaUnmapMemory(gAllocator, staging_buffer.vma_allocation);
-
-    stbi_image_free(pixels);
-
-
     // begin staging command buffer
     VkCommandBufferBeginInfo cmd_buffer_begin_info = {};
     cmd_buffer_begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
     cmd_buffer_begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
 
     // fixme: we need thowaway command buffers
-    vkBeginCommandBuffer(gFrames[0].graphics_command_buffer, &cmd_buffer_begin_info);
+    auto command_buffer = gFrames[0].graphics_command_buffer;
+    vkBeginCommandBuffer(command_buffer, &cmd_buffer_begin_info);
 
+    VkImageSubresourceRange subresource_range{};
+    subresource_range.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    subresource_range.baseMipLevel = 0;
+    subresource_range.baseArrayLayer = 0;
+    subresource_range.levelCount = 1;
+    subresource_range.layerCount = 1;
 
-
-
-
-
-
-    // fixme: we have a function for this: TransitionImageLayout()!!
-    {
-        // image layout transitioning
-        VkImageSubresourceRange image_subresource_range{};
-        image_subresource_range.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        image_subresource_range.baseMipLevel = 0;
-        image_subresource_range.levelCount = 1;
-        image_subresource_range.baseArrayLayer = 0;
-        image_subresource_range.layerCount = 1;
-
-        VkImageMemoryBarrier image_memory_barrier_from_undefined_to_transfer_dst = {};
-        image_memory_barrier_from_undefined_to_transfer_dst.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-        image_memory_barrier_from_undefined_to_transfer_dst.srcAccessMask = 0;
-        image_memory_barrier_from_undefined_to_transfer_dst.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-        image_memory_barrier_from_undefined_to_transfer_dst.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-        image_memory_barrier_from_undefined_to_transfer_dst.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-        image_memory_barrier_from_undefined_to_transfer_dst.image = image;
-        image_memory_barrier_from_undefined_to_transfer_dst.subresourceRange = image_subresource_range;
-
-        {
-            VkPipelineStageFlags src_stage_flags = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
-            VkPipelineStageFlags dst_stage_flags = VK_PIPELINE_STAGE_TRANSFER_BIT;
-            vkCmdPipelineBarrier(gFrames[0].graphics_command_buffer, src_stage_flags, dst_stage_flags, 0, 0, NULL, 0, NULL, 1, &image_memory_barrier_from_undefined_to_transfer_dst);
-        }
-    }
-
-
+    TransitionImageLayout(command_buffer, image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, subresource_range, false);
 
     // copy data
     VkBufferImageCopy buffer_image_copy{};
@@ -405,39 +383,9 @@ void Texture::Create(const char* filepath, bool is_cubemap)
     buffer_image_copy.imageSubresource = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1 };
     buffer_image_copy.imageOffset = { 0, 0, 0 }; // x, y, z
     buffer_image_copy.imageExtent = { (uint32_t)tex_width, (uint32_t)tex_height, 1 };
-    vkCmdCopyBufferToImage(gFrames[0].graphics_command_buffer, staging_buffer.handle, image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &buffer_image_copy);
+    vkCmdCopyBufferToImage(command_buffer, staging_buffer.handle, image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &buffer_image_copy);
 
-
-
-    // fixme: we have a function for this: TransitionImageLayout()!!
-
-    {
-        VkImageSubresourceRange image_subresource_range{};
-        image_subresource_range.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        image_subresource_range.baseMipLevel = 0;
-        image_subresource_range.levelCount = 1;
-        image_subresource_range.baseArrayLayer = 0;
-        image_subresource_range.layerCount = 1;
-
-        // Image layout transfer to SHADER_READ_ONLY_OPTIMAL
-        VkImageMemoryBarrier image_memory_barrier_from_transfer_to_shader_read = {};
-        image_memory_barrier_from_transfer_to_shader_read.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-        image_memory_barrier_from_transfer_to_shader_read.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-        image_memory_barrier_from_transfer_to_shader_read.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-        image_memory_barrier_from_transfer_to_shader_read.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-        image_memory_barrier_from_transfer_to_shader_read.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-        image_memory_barrier_from_transfer_to_shader_read.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        image_memory_barrier_from_transfer_to_shader_read.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        image_memory_barrier_from_transfer_to_shader_read.image = image;
-        image_memory_barrier_from_transfer_to_shader_read.subresourceRange = image_subresource_range;
-
-        {
-            VkPipelineStageFlags src_stage_flags = VK_PIPELINE_STAGE_TRANSFER_BIT;
-            VkPipelineStageFlags dst_stage_flags = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
-            vkCmdPipelineBarrier(gFrames[0].graphics_command_buffer, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0, 0, nullptr, 0, nullptr, 1, &image_memory_barrier_from_transfer_to_shader_read);
-        }
-    }
-
+    TransitionImageLayout(command_buffer, image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, subresource_range, false);
 
 
 
@@ -499,6 +447,136 @@ void Texture::Create(const char* filepath, bool is_cubemap)
 
 
     gTextures_count++;
+}
+
+
+void Texture::CreateCubemapKTX(const char* filepath, VkFormat format)
+{
+    ktxResult result;
+    ktxTexture* ktx_texture;
+
+    result = ktxTexture_CreateFromNamedFile(filepath, KTX_TEXTURE_CREATE_LOAD_IMAGE_DATA_BIT, &ktx_texture);
+    assert(result == KTX_SUCCESS);
+
+    this->format = format;
+    width = ktx_texture->baseWidth;
+    height = ktx_texture->baseHeight;
+    mip_levels = ktx_texture->numLevels;
+    ktx_uint8_t* ktx_texture_data = ktxTexture_GetData(ktx_texture);
+    ktx_size_t ktx_texture_data_size = ktxTexture_GetDataSize(ktx_texture);
+
+
+    VkFormat ktxformat = ktxTexture_GetVkFormat(ktx_texture);
+    printf("ktxTexture_GetVkFormat: %d, format: %d", ktxformat, format);
+
+
+
+    Buffer staging_buffer;
+    VKCHECK(CreateBuffer(&staging_buffer, ktx_texture_data_size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_ALLOCATION_CREATE_MAPPED_BIT, VMA_MEMORY_USAGE_CPU_ONLY));
+    void* staging_data;
+    vmaMapMemory(gAllocator, staging_buffer.vma_allocation, &staging_data);
+    assert(ktx_texture_data);
+    memcpy(staging_data, ktx_texture_data, ktx_texture_data_size);
+    vmaFlushAllocation(gAllocator, staging_buffer.vma_allocation, 0, VK_WHOLE_SIZE);
+    vmaUnmapMemory(gAllocator, staging_buffer.vma_allocation);
+
+
+
+    // Create optimal tiled target image
+    VkImageCreateInfo ci_image{};
+    ci_image.imageType = VK_IMAGE_TYPE_2D;
+    ci_image.format = format;
+    ci_image.mipLevels = mip_levels;
+    ci_image.samples = VK_SAMPLE_COUNT_1_BIT;
+    ci_image.tiling = VK_IMAGE_TILING_OPTIMAL;
+    ci_image.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    ci_image.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    ci_image.extent = { width, height, 1 };
+    ci_image.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+    // Cube faces count as array layers in Vulkan
+    ci_image.arrayLayers = 6;
+    // This flag is required for cube map images
+    ci_image.flags = VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
+
+    VmaAllocationCreateInfo ci_allocation = {};
+    ci_allocation.usage = VMA_MEMORY_USAGE_GPU_ONLY;
+    VKCHECK(vmaCreateImage(gAllocator, &ci_image, &ci_allocation, &image, &allocation, NULL));
+
+
+    VkImageViewCreateInfo ci_image_view = {};
+    ci_image_view.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+    ci_image_view.image = image;
+    ci_image_view.format = format;
+    ci_image_view.viewType = VK_IMAGE_VIEW_TYPE_CUBE;
+    ci_image_view.components = {}; // VK_COMPONENT_SWIZZLE_IDENTITY = 0
+    ci_image_view.subresourceRange = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 };
+
+    VKCHECK(vkCreateImageView(gDevice, &ci_image_view, NULL, &view));
+
+
+
+
+
+
+    // begin staging command buffer
+    VkCommandBufferBeginInfo cmd_buffer_begin_info = {};
+    cmd_buffer_begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    cmd_buffer_begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+    // fixme: we need thowaway command buffers
+    auto command_buffer = gFrames[0].graphics_command_buffer;
+    vkBeginCommandBuffer(command_buffer, &cmd_buffer_begin_info);
+
+    VkImageSubresourceRange subresource_range{};
+    subresource_range.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    subresource_range.baseMipLevel = 0;
+    subresource_range.baseArrayLayer = 0;
+    subresource_range.levelCount = mip_levels;
+    subresource_range.layerCount = 6;
+
+    TransitionImageLayout(command_buffer, image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, subresource_range, false);
+
+    // Setup buffer copy regions for each face including all of its miplevels
+    std::vector<VkBufferImageCopy> image_copy_regions;
+    uint32_t offset = 0;
+
+    for (uint32_t face = 0; face < 6; face++)
+    {
+        for (uint32_t level = 0; level < mip_levels; level++)
+        {
+            // Calculate offset into staging buffer for the current mip level and face
+            ktx_size_t offset;
+            KTX_error_code ret = ktxTexture_GetImageOffset(ktx_texture, level, 0, face, &offset);
+            assert(ret == KTX_SUCCESS);
+            VkBufferImageCopy image_copy_region = {};
+            image_copy_region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            image_copy_region.imageSubresource.mipLevel = level;
+            image_copy_region.imageSubresource.baseArrayLayer = face;
+            image_copy_region.imageSubresource.layerCount = 1;
+            image_copy_region.imageExtent.width = ktx_texture->baseWidth >> level;
+            image_copy_region.imageExtent.height = ktx_texture->baseHeight >> level;
+            image_copy_region.imageExtent.depth = 1;
+            image_copy_region.bufferOffset = offset;
+            image_copy_regions.push_back(image_copy_region);
+        }
+    }
+
+    TransitionImageLayout(command_buffer, image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, subresource_range, false);
+
+    VKCHECK(vkEndCommandBuffer(gFrames[0].graphics_command_buffer));
+
+    // Submit command buffer and copy data from staging buffer to a vertex buffer
+    VkSubmitInfo submit_info{};
+    submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    submit_info.commandBufferCount = 1;
+    submit_info.pCommandBuffers = &gFrames[0].graphics_command_buffer;
+    VKCHECK(vkQueueSubmit(gQueues._graphics, 1, &submit_info, VK_NULL_HANDLE));
+    vkDeviceWaitIdle(gDevice);
+
+    vmaDestroyBuffer(gAllocator, staging_buffer.handle, staging_buffer.vma_allocation);
+
+
+
+
 }
 
 void Texture::Destroy()
@@ -1090,8 +1168,13 @@ void BeginRendering()
     //
     // Swapchain image layout transition for Rendering
     //
+    VkImageSubresourceRange subresource_range{};
+    subresource_range.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    subresource_range.levelCount = 1;
+    subresource_range.layerCount = 1;
+
     TransitionImageLayout(gGraphics_cmd_buffer_in_flight, gSwapchain._images[gFrames[gFrame_in_flight].image_idx],
-        VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL, false);
+        VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL, subresource_range, false);
 
 
 
@@ -1172,7 +1255,12 @@ void EndRendering() {
     //
     // Swapchain image layout transition for presenting
     //
-    TransitionImageLayout(gGraphics_cmd_buffer_in_flight, gSwapchain._images[gFrames[gFrame_in_flight].image_idx], VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, false);
+    VkImageSubresourceRange subresource_range{};
+    subresource_range.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    subresource_range.levelCount = 1;
+    subresource_range.layerCount = 1;
+
+    TransitionImageLayout(gGraphics_cmd_buffer_in_flight, gSwapchain._images[gFrames[gFrame_in_flight].image_idx], VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, subresource_range, false);
     VKCHECK(vkEndCommandBuffer(gGraphics_cmd_buffer_in_flight));
 
 
@@ -1432,7 +1520,7 @@ bool InitRenderer()
         vkGetPhysicalDeviceFeatures(gGpu._physical_device, &gGpu._features);
 
         gGpu._features2 = physical_device_features2.features;
-    }
+        }
 
 
 
@@ -1698,7 +1786,12 @@ bool InitRenderer()
         begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
         begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
         VKCHECK(vkBeginCommandBuffer(gFrames[0].graphics_command_buffer, &begin_info));
-        TransitionImageLayout(gFrames[0].graphics_command_buffer, gSwapchain._depth_image.handle, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL, true);
+
+        VkImageSubresourceRange subresource_range{};
+        subresource_range.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+        subresource_range.levelCount = 1;
+        subresource_range.layerCount = 1;
+        TransitionImageLayout(gFrames[0].graphics_command_buffer, gSwapchain._depth_image.handle, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL, subresource_range, true);
 
         VKCHECK(vkEndCommandBuffer(gFrames[0].graphics_command_buffer));
 
@@ -2040,7 +2133,7 @@ bool InitRenderer()
     CreateGraphicsPipeline(gDevice, &gDefault_graphics_pipeline);
 
     return 1;
-}
+    }
 
 void Swapchain::Create(VkDevice device, VkPhysicalDevice physical_device, VkSurfaceKHR surface, VkSwapchainKHR old_swapchain)
 {
@@ -2522,7 +2615,7 @@ static VkResult CreateBuffer(Buffer* buffer, VkDeviceSize size, VkBufferUsageFla
     return vmaCreateBuffer(gAllocator, &buffer_ci, &vma_allocation_ci, &buffer->handle, &buffer->vma_allocation, NULL);
 }
 
-static void TransitionImageLayout(VkCommandBuffer command_buffer, VkImage image, VkImageLayout old_layout, VkImageLayout new_layout, bool is_depth)
+static void TransitionImageLayout(VkCommandBuffer command_buffer, VkImage image, VkImageLayout old_layout, VkImageLayout new_layout, VkImageSubresourceRange subresource_range, bool is_depth)
 {
     VkImageMemoryBarrier2 barrier = {};
     barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
@@ -2533,11 +2626,16 @@ static void TransitionImageLayout(VkCommandBuffer command_buffer, VkImage image,
     barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
 
     barrier.image = image;
-    barrier.subresourceRange.aspectMask = is_depth ? VK_IMAGE_ASPECT_DEPTH_BIT : VK_IMAGE_ASPECT_COLOR_BIT;
-    barrier.subresourceRange.baseMipLevel = 0;
-    barrier.subresourceRange.levelCount = 1;
-    barrier.subresourceRange.baseArrayLayer = 0;
-    barrier.subresourceRange.layerCount = 1;
+    barrier.subresourceRange = subresource_range;
+
+    // todo: we can keep this here instead of being an argument
+    // but requires 2 additional function arguments: (..., is_cube, mip_levels)
+
+    //barrier.subresourceRange.aspectMask = is_depth ? VK_IMAGE_ASPECT_DEPTH_BIT : VK_IMAGE_ASPECT_COLOR_BIT;
+    //barrier.subresourceRange.baseMipLevel = 0;
+    //barrier.subresourceRange.baseArrayLayer = 0;
+    //barrier.subresourceRange.levelCount = 1;
+    //barrier.subresourceRange.layerCount = 1;
 
     barrier.srcStageMask = VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT;
     barrier.dstStageMask = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;

@@ -6,6 +6,8 @@
 #include <vulkan/vulkan.h>
 #include <vma/vk_mem_alloc.h>
 #include <cgltf.h>
+#include <vector>
+#include <SDL2/SDL.h>
 
 struct GlobalUniforms
 {
@@ -89,17 +91,19 @@ struct Camera
 struct Texture
 {
     const char* name;
-    VkImage       image;
+    VkImage image;
     VmaAllocation allocation;
-    VkImageView   view;
-    VkFormat      format;
+    VkImageView view;
+    VkFormat format;
 
-    int      width;
-    int      height;
+    uint32_t mip_levels;
+    uint32_t width;
+    uint32_t height;
     uint32_t num_channels;
     uint32_t id;
 
-    void Create(const char* filepath, bool is_cubemap);
+    void Create(const char* filepath);
+    void CreateCubemapKTX(const char* filepath, VkFormat format);
     void Destroy();
 };
 
@@ -208,7 +212,7 @@ struct Mesh
     VkBuffer      vertex_buffer;
     VmaAllocation vertex_buffer_allocation;
 
-    cgltf_data* _mesh_data;
+    cgltf_data* _mesh_data; // fixme: dont need to store this member. removing it would allow us to remove cgltf from the public interface
 
     struct SkinnedMesh
     {

@@ -109,14 +109,14 @@
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <EnableModules>false</EnableModules>
-      <AdditionalIncludeDirectories>C:\VulkanSDK\1.3.224.1\Include;$(ProjectDir)vendor\GLM;$(ProjectDir)vendor\SDL2\include;$(ProjectDir)vendor\stb;$(ProjectDir)src</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)vendor\GLM;$(ProjectDir)vendor\SDL2\include;$(ProjectDir)vendor\stb;$(ProjectDir)src;C:\VulkanSDK\1.3.224.1\Include;C:\Program Files\KTX-Software\include</AdditionalIncludeDirectories>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalLibraryDirectories>$(ProjectDir)vendor\SDL2\lib;C:\VulkanSDK\1.3.224.1\Lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>shell32.lib;OpenGL32.lib;SDL2main.lib;SDL2.lib;vulkan-1.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>%(AdditionalLibraryDirectories);$(ProjectDir)vendor\SDL2\lib;C:\VulkanSDK\1.3.224.1\Lib;C:\Program Files\KTX-Software\lib</AdditionalLibraryDirectories>
+      <AdditionalDependencies>shell32.lib;OpenGL32.lib;SDL2main.lib;SDL2.lib;vulkan-1.lib;ktx.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <LinkTimeCodeGeneration>
       </LinkTimeCodeGeneration>
       <LinkStatus>
@@ -134,7 +134,7 @@
       <LanguageStandard>stdcpp20</LanguageStandard>
       <EnableModules>true</EnableModules>
       <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
-      <AdditionalIncludeDirectories>C:\VulkanSDK\1.3.224.1\Include;$(ProjectDir)vendor\GLM;$(ProjectDir)vendor\SDL2\include;$(ProjectDir)vendor\stb;$(ProjectDir)src</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)vendor\GLM;$(ProjectDir)vendor\SDL2\include;$(ProjectDir)vendor\stb;$(ProjectDir)src;C:\VulkanSDK\1.3.224.1\Include;C:\Program Files\KTX-Software\include</AdditionalIncludeDirectories>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
     </ClCompile>
     <Link>
@@ -142,8 +142,8 @@
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalLibraryDirectories>$(ProjectDir)vendor\SDL2\lib;C:\VulkanSDK\1.3.224.1\Lib;</AdditionalLibraryDirectories>
-      <AdditionalDependencies>shell32.lib;OpenGL32.lib;SDL2main.lib;SDL2.lib;vulkan-1.lib;$(CoreLibraryDependencies);%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>$(ProjectDir)vendor\SDL2\lib;C:\VulkanSDK\1.3.224.1\Lib;C:\Program Files\KTX-Software\lib</AdditionalLibraryDirectories>
+      <AdditionalDependencies>shell32.lib;OpenGL32.lib;SDL2main.lib;SDL2.lib;vulkan-1.lib;ktx.lib;$(CoreLibraryDependencies);%(AdditionalDependencies)</AdditionalDependencies>
       <LinkTimeCodeGeneration>UseLinkTimeCodeGeneration</LinkTimeCodeGeneration>
       <LinkStatus>false</LinkStatus>
     </Link>
