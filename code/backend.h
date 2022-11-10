@@ -1,2 +1,0 @@
-#define VULKAN
-// #define GL
