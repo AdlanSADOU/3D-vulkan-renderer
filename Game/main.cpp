@@ -5,31 +5,51 @@
 
 struct Entity
 {
-    Mesh          mesh;
-    ObjectData    object_data;
-    PushConstants push_constants;
-    Transform     _transform;
+    Renderer::Mesh          mesh;
+    Renderer::ObjectData    object_data;
+    Renderer::PushConstants push_constants;
+    Renderer::Transform     transform;
 
+    // for per object things like model matrix & joint matrices
+    // this is an index that must be unique to a rendered entity as a whole
+    // it is used to index ObjectData[] inside a vertex shader provided as part of push constants
+    // it is mandatory!! So probably dosen't belong here!!
     int32_t object_idx;
 };
 std::vector<Entity> entities{};
 
-Mesh warrior;
-Mesh terrain;
+Entity skybox;
+Renderer::Texture skybox_texture;
+Renderer::Mesh skybox_mesh;
 
-Camera camera{};
-Input input = {};
+Renderer::Mesh warrior;
+Renderer::Mesh terrain;
 
-void UpdateAndRenderGame(float dt, Input* input);
+Renderer::Camera camera{};
+Renderer::Input input = {}; // fixme: tied to Renderer because Camera uses it!!
+
+void UpdateAndRenderGame(float dt, Renderer::Input* input);
+int width = 1180;
+int height = 720;
 
 extern int main(int argc, char** argv)
 {
-    // SetWindowDimensions(WIDTH, HEIGHT);
-    InitRenderer();
-    camera.CameraCreate({ 0, 10, 44 }, 45.f, 16 / (float)9, .8f, 4000.f);
-    camera.mode = Camera::CameraMode::THIRD_PERSON;
+    Renderer::SetWindowSize(width, height);
+    Renderer::InitRenderer();
+
+    camera.CameraCreate({ 0, 0, 0 }, 45.f, width / (float)height, .8f, 4000.f);
+    camera.mode = Renderer::Camera::CameraMode::THIRD_PERSON;
     camera._pitch = -40;
     SetActiveCamera(&camera);
+
+
+    skybox_texture.CreateCubemapKTX("assets/skybox/skybox_test.ktx", VK_FORMAT_R8G8B8A8_UNORM);
+    skybox_mesh.Create("assets/skybox/cube.gltf");
+    skybox.mesh = skybox_mesh;
+    skybox.object_idx = 99;
+    skybox.transform.scale = glm::vec3(1.f);
+    skybox.push_constants.is_skybox = 1;
+    //skybox.mesh._meshes[0].material_data[0].base_color_texture_idx = skybox_texture.descriptor_array_idx;
 
     warrior.Create("assets/warrior2/warrior.gltf");
     terrain.Create("assets/terrain/terrain.gltf");
@@ -40,7 +60,7 @@ extern int main(int argc, char** argv)
         static float x = 0;
 
         int   distanceFactor = 22;
-        int   max_entities_on_row = 32;
+        int   max_entities_on_row = 16;
         float startingOffset = 0.f;
 
         if (i > 0) x++;
@@ -52,9 +72,9 @@ extern int main(int argc, char** argv)
         if (i == 0) {
             entities[i].mesh = warrior;
             // then the following line will crash
-            entities[i]._transform.translation = { startingOffset + x * distanceFactor, 0.f, startingOffset + z * distanceFactor };
-            entities[i]._transform.rotation = glm::quat({ 0, 0, 0 });
-            entities[i]._transform.scale = glm::vec3(.10f);
+            entities[i].transform.translation = { startingOffset + x * distanceFactor, 0.f, startingOffset + z * distanceFactor };
+            entities[i].transform.rotation = glm::quat({ 0, 0, 0 });
+            entities[i].transform.scale = glm::vec3(.10f);
             entities[i].object_idx = i;
 
             entities[i].mesh._current_animation = &entities[i].mesh._animations[0];
@@ -63,9 +83,9 @@ extern int main(int argc, char** argv)
         else if (i == 1) {
             entities[i].mesh = terrain;
             // then the following line will crash
-            entities[i]._transform.translation = { startingOffset + x * distanceFactor, 0.f, startingOffset + z * distanceFactor };
-            entities[i]._transform.rotation = glm::quat({ 0, 0, 0 });
-            entities[i]._transform.scale = glm::vec3(1000.0f);
+            entities[i].transform.translation = { startingOffset + x * distanceFactor, 0.f, startingOffset + z * distanceFactor };
+            entities[i].transform.rotation = glm::quat({ 0, 0, 0 });
+            entities[i].transform.scale = glm::vec3(1000.0f);
             entities[i].object_idx = i;
             entities[i].mesh._meshes[0].material_data[0].tiling_x = 10;
             entities[i].mesh._meshes[0].material_data[0].tiling_y = 10;
@@ -74,9 +94,9 @@ extern int main(int argc, char** argv)
         else {
             entities[i].mesh = warrior;
             // then the following line will crash
-            entities[i]._transform.translation = { startingOffset + x * distanceFactor, 0.f, startingOffset + z * distanceFactor };
-            entities[i]._transform.rotation = glm::quat({ 0, 0, 0 });
-            entities[i]._transform.scale = glm::vec3(.10f);
+            entities[i].transform.translation = { startingOffset + x * distanceFactor, 0.f, startingOffset + z * distanceFactor };
+            entities[i].transform.rotation = glm::quat({ 0, 0, 0 });
+            entities[i].transform.scale = glm::vec3(.10f);
             entities[i].object_idx = i;
 
             entities[i].mesh._current_animation = &entities[i].mesh._animations[0];
@@ -129,7 +149,7 @@ extern int main(int argc, char** argv)
                     if (key == SDLK_e) input.E = true;
                     if (key == SDLK_f)
                     {
-                        SDL_SetWindowFullscreen(GetSDLWindowHandle(), SDL_WINDOW_FULLSCREEN_DESKTOP);
+                        SDL_SetWindowFullscreen(Renderer::GetSDLWindowHandle(), SDL_WINDOW_FULLSCREEN_DESKTOP);
                     }
 
                     break;
@@ -158,6 +178,9 @@ extern int main(int argc, char** argv)
                     // because some reason the case that follows this one is always triggered on first few runs
                 case SDL_WINDOWEVENT:
                     switch (e.window.event) {
+                    case SDL_WINDOWEVENT_RESIZED:
+                        SDL_GetWindowSize(Renderer::GetSDLWindowHandle(), &width, &height);
+                        break;
                     case SDL_WINDOWEVENT_MINIMIZED:
                         window_minimized = true;
                         break;
@@ -179,11 +202,9 @@ extern int main(int argc, char** argv)
         if (window_minimized) continue;
 
 
-        BeginRendering();
-
+        Renderer::BeginRendering();
         UpdateAndRenderGame(dt, &input);
-
-        EndRendering();
+        Renderer::EndRendering();
 
 
 
@@ -211,13 +232,11 @@ extern int main(int argc, char** argv)
                 MCyclesPerFrame,
                 MCyclesPerFrame / dt);
 
-            SDL_SetWindowTitle(GetSDLWindowHandle(), buffer);
+            SDL_SetWindowTitle(Renderer::GetSDLWindowHandle(), buffer);
             acc = 0;
         }
 
     }
-
-
 
     /*vkDestroySurfaceKHR(gInstance, gSurface, NULL);
     vkDestroyInstance(gInstance, NULL);*/
@@ -227,11 +246,12 @@ extern int main(int argc, char** argv)
 
 glm::vec3 last_direction;
 
-void UpdateAndRenderGame(float dt, Input* input)
+void UpdateAndRenderGame(float dt, Renderer::Input* input)
 {
-    camera.CameraUpdate(input, dt, entities[0]._transform.translation);
-    SetActiveCamera(&camera);
+    camera.CameraUpdate(input, dt, entities[0].transform.translation);
     camera._forward.y = 0;
+    camera._aspect = width / (float)height;
+    SetActiveCamera(&camera);
 
     glm::vec3 direction{ 0, 0, 0 };
 
@@ -254,28 +274,41 @@ void UpdateAndRenderGame(float dt, Input* input)
 
         if (entities[0].mesh._current_animation->handle != entities[0].mesh._animations[1].handle)
             entities[0].mesh._current_animation = &entities[0].mesh._animations[1];
-        entities[0]._transform.rotation = glm::quatLookAt(direction, camera._up);
-        // entities[0]._transform.rotation = glm::slerp(entities[0]._transform.rotation, glm::quatLookAt(last_direction, camera._up), dt * 6.2f, 1);
-        entities[0]._transform.translation += direction * dt * 100.f * -1.f;
+        entities[0].transform.rotation = glm::quatLookAt(direction, camera._up);
+        // entities[0].transform.rotation = glm::slerp(entities[0].transform.rotation, glm::quatLookAt(last_direction, camera._up), dt * 6.2f, 1);
+        entities[0].transform.translation += direction * dt * 74.f * -1.f;
         last_direction = direction;
     }
     else if (entities[0].mesh._current_animation->handle != entities[0].mesh._animations[0].handle)
         entities[0].mesh._current_animation = &entities[0].mesh._animations[0];
 
 
+    Renderer::EnableDepthWrite(false);
+    Renderer::EnableDepthTest(false);
+    Renderer::SetCullMode(VK_CULL_MODE_FRONT_BIT);
+    glm::mat4 skybox_model_matrix = glm::mat4(1);
+    skybox_model_matrix = glm::translate(skybox_model_matrix, skybox.transform.translation) * glm::scale(skybox_model_matrix, glm::vec3(skybox.transform.scale));
 
+    skybox.object_data.model_matrix = skybox_model_matrix;
+    skybox.push_constants.object_idx = skybox.object_idx;
+    Renderer::SetPushConstants(&skybox.push_constants);
+    Renderer::SetObjectData(&skybox.object_data, skybox.object_idx);
+    Renderer::Draw(&skybox.mesh);
 
+    Renderer::EnableDepthWrite(true);
+    Renderer::EnableDepthTest(true);
+    Renderer::SetCullMode(VK_CULL_MODE_BACK_BIT);
 
     for (size_t i = 0; i < entities.size(); i++) {
-        glm::mat4 mesh = glm::mat4(1);
+        glm::mat4 model_matrix = glm::mat4(1);
 
-        mesh = glm::translate(mesh, entities[i]._transform.translation)
-            * glm::mat4_cast(entities[i]._transform.rotation)
-            * glm::scale(mesh, glm::vec3(entities[i]._transform.scale));
+        model_matrix = glm::translate(model_matrix, entities[i].transform.translation)
+            * glm::mat4_cast(entities[i].transform.rotation)
+            * glm::scale(model_matrix, glm::vec3(entities[i].transform.scale));
 
-        entities[i].object_data.model_matrix = mesh;
+        entities[i].object_data.model_matrix = model_matrix;
 
-        PushConstants constants;
+        Renderer::PushConstants constants;
         constants.object_idx = entities[i].object_idx;
 
         if (entities[i].mesh._current_animation) {
@@ -288,8 +321,10 @@ void UpdateAndRenderGame(float dt, Input* input)
             }
         }
 
-        SetObjectData(&entities[i].object_data, entities[i].object_idx);
-        SetPushConstants(&constants);
-        Draw(&entities[i].mesh);
+        Renderer::SetPushConstants(&constants);
+        Renderer::SetObjectData(&entities[i].object_data, entities[i].object_idx);
+        Renderer::Draw(&entities[i].mesh);
     }
+
+
 }

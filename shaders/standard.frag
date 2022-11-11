@@ -6,10 +6,13 @@
 layout (location = 0) in vec3 v_out_NORMAL;
 layout (location = 1) in vec2 v_out_texcoord_0;
 layout (location = 2) in flat int baseInstance;
+layout (location = 3) in flat int outIsSkybox;
+layout (location = 4) in vec3 outSkyboxUVW;
 
 layout (location = 0) out vec4 Frag_Color;
 
-layout(set = 3, binding = 0) uniform sampler   samp;
+layout(set = 3, binding = 0) uniform samplerCube samplerCubeMap;
+layout(set = 3, binding = 1) uniform sampler   samp;
 layout(set = 3, binding = 1) uniform texture2D textures[];
 
 // per mesh data
@@ -38,12 +41,13 @@ void main()
 
     int v_out_base_color_texture_idx = mat.base_color_texture_idx;
 
-    if (mat.base_color_texture_idx > -1)
-    {
+    if (outIsSkybox == int(1)) {
+        Frag_Color = texture(samplerCubeMap, outSkyboxUVW);
+    } else if (mat.base_color_texture_idx > -1 && outIsSkybox == int(-1)) {
         Frag_Color = texture(sampler2D(textures[v_out_base_color_texture_idx], samp), vec2(v_out_texcoord_0.x * mat.tiling_x, v_out_texcoord_0.y * mat.tiling_y)) * shade * mat.base_color_factor;
     } else {
         Frag_Color = mat.base_color_factor * shade;
-
     }
-    // debugPrintfEXT("v_out_base_color_texture_idx[%d]\n", v_out_base_color_texture_idx);
+
+	// debugPrintfEXT("v_out_base_color_texture_idx[%d]\n", v_out_base_color_texture_idx);
 }
