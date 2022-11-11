@@ -43,7 +43,7 @@ extern int main(int argc, char** argv)
     SetActiveCamera(&camera);
 
 
-    skybox_texture.CreateCubemapKTX("assets/skybox/skybox_test.ktx", VK_FORMAT_R8G8B8A8_UNORM);
+    skybox_texture.CreateCubemapKTX("assets/skybox/skybox.ktx", VK_FORMAT_R8G8B8A8_UNORM);
     skybox_mesh.Create("assets/skybox/cube.gltf");
     skybox.mesh = skybox_mesh;
     skybox.object_idx = 99;
