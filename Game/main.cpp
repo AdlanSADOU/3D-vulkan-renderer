@@ -13,7 +13,8 @@ struct Entity
     // for per object things like model matrix & joint matrices
     // this is an index that must be unique to a rendered entity as a whole
     // it is used to index ObjectData[] inside a vertex shader provided as part of push constants
-    // it is mandatory!! So probably dosen't belong here!!
+    // and also to index mapped_object_data_ptrs
+    // it is mandatory!! So should probably be handled automatically by the rendering backend somehow!!
     int32_t object_idx;
 };
 std::vector<Entity> entities{};
@@ -24,6 +25,8 @@ Renderer::Mesh skybox_mesh;
 
 Renderer::Mesh warrior;
 Renderer::Mesh terrain;
+Renderer::Mesh hache;
+
 
 Renderer::Camera camera{};
 Renderer::Input input = {}; // fixme: tied to Renderer because Camera uses it!!
@@ -46,22 +49,23 @@ extern int main(int argc, char** argv)
     skybox_texture.CreateCubemapKTX("assets/skybox/skybox.ktx", VK_FORMAT_R8G8B8A8_UNORM);
     skybox_mesh.Create("assets/skybox/cube.gltf");
     skybox.mesh = skybox_mesh;
-    skybox.object_idx = 99;
-    skybox.transform.scale = glm::vec3(1.f);
+    skybox.object_idx = 1024 - 1;
+    skybox.transform.scale = glm::vec3(1.);
     skybox.push_constants.is_skybox = 1;
     //skybox.mesh._meshes[0].material_data[0].base_color_texture_idx = skybox_texture.descriptor_array_idx;
 
     warrior.Create("assets/warrior2/warrior.gltf");
     terrain.Create("assets/terrain/terrain.gltf");
+    hache.Create("assets/hache/hache.gltf");
 
-    entities.resize(2);
+    entities.resize(3);
     for (int i = 0; i < entities.size(); i++) {
         static float z = 0;
         static float x = 0;
 
-        int   distanceFactor = 22;
-        int   max_entities_on_row = 16;
-        float startingOffset = 0.f;
+        int   distanceFactor = 16;
+        int   max_entities_on_row = 64;
+        float startingOffset = -100.f;
 
         if (i > 0) x++;
         if (x == max_entities_on_row) {
@@ -87,11 +91,18 @@ extern int main(int argc, char** argv)
             entities[i].transform.rotation = glm::quat({ 0, 0, 0 });
             entities[i].transform.scale = glm::vec3(1000.0f);
             entities[i].object_idx = i;
-            entities[i].mesh._meshes[0].material_data[0].tiling_x = 10;
-            entities[i].mesh._meshes[0].material_data[0].tiling_y = 10;
+            entities[i].mesh._meshes[0].material_data[0].tiling_x = 32;
+            entities[i].mesh._meshes[0].material_data[0].tiling_y = 32;
 
         }
         else {
+            //entities[i].mesh = hache;
+            //// then the following line will crash
+            //entities[i].transform.translation = { startingOffset + (x - 2) * distanceFactor, 16.f, startingOffset + z * distanceFactor };
+            //entities[i].transform.rotation = glm::quat({ glm::radians(90.f), glm::radians(90.f), 0});
+            //entities[i].transform.scale = glm::vec3(3);
+            //entities[i].object_idx = i;
+
             entities[i].mesh = warrior;
             // then the following line will crash
             entities[i].transform.translation = { startingOffset + x * distanceFactor, 0.f, startingOffset + z * distanceFactor };
@@ -101,6 +112,10 @@ extern int main(int argc, char** argv)
 
             entities[i].mesh._current_animation = &entities[i].mesh._animations[0];
             entities[i].mesh._should_play_animation = true;
+
+            //entities[i].mesh._current_animation = &entities[i].mesh._animations[0];
+            //entities[i].mesh._should_play_animation = true;
+
         }
     }
 
@@ -325,6 +340,4 @@ void UpdateAndRenderGame(float dt, Renderer::Input* input)
         Renderer::SetObjectData(&entities[i].object_data, entities[i].object_idx);
         Renderer::Draw(&entities[i].mesh);
     }
-
-
 }

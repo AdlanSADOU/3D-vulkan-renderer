@@ -22,8 +22,9 @@
 
 // node(ad) this is used for bindless ObjectData & MaterialDataSSBO shader resources
 // which can be indexed for every rendered mesh
-constexpr int MAX_RENDER_ENTITIES = 1024;
+constexpr int MAX_RENDER_ENTITIES = 1024 * 10;
 constexpr int PROMPT_GPU_SELECTION_AT_STARTUP = 0;
+VkSampleCountFlagBits sample_count = VK_SAMPLE_COUNT_8_BIT;
 
 #define SECONDS(value)                  (1000000000 * value)
 #define ARR_COUNT(arr)                  (sizeof(arr) / sizeof(arr[0]))
@@ -40,6 +41,8 @@ namespace Renderer {
     static Camera* gActive_camera = NULL;
 
     ////////////// Engine Interface ///////////////////
+    VkCommandBuffer BeginCommandBuffer();
+    void FlushCommandBuffer(const VkCommandBuffer* command_buffer);
     VkResult CreateBuffer(Buffer* buffer, VkDeviceSize size, VkBufferUsageFlags buffer_usage, VmaAllocationCreateFlags allocation_flags, VmaMemoryUsage memory_usage);
     void     TransitionImageLayout(VkCommandBuffer command_buffer, VkImage image, VkImageLayout old_layout, VkImageLayout new_layout, VkImageSubresourceRange subresource_range, bool is_depth);
     void     CreateGraphicsPipeline(VkDevice device, VkPipeline* pipeline);
@@ -50,7 +53,7 @@ namespace Renderer {
     // VK_PRESENT_MODE_FIFO_KHR; // widest support / VSYNC
     // VK_PRESENT_MODE_IMMEDIATE_KHR; // present as fast as possible, high tearing chance
     // VK_PRESENT_MODE_MAILBOX_KHR; // present as fast as possible, low tearing chance
-    VkPresentModeKHR present_mode = VK_PRESENT_MODE_FIFO_KHR;
+    VkPresentModeKHR present_mode = VK_PRESENT_MODE_IMMEDIATE_KHR;
 
     static SDL_Window* gWindow;
     static VkInstance       gInstance;
@@ -81,7 +84,6 @@ namespace Renderer {
     } gQueues;
 
     VkCommandPool   gGraphics_command_pool;
-    VkCommandBuffer gGraphics_command_buffer;
 
     struct Swapchain
     {
@@ -90,6 +92,9 @@ namespace Renderer {
         std::vector<VkImage>     _images = {};
         std::vector<VkImageView> _image_views = {};
         VkFormat                 _format;
+
+        Image                    _msaa_image{};
+        VkImageView              _msaa_image_view{};
         Image                    _depth_image = {};
         VkImageView              _depth_image_view = {};
         uint32_t                 _image_count = {};
@@ -259,8 +264,68 @@ namespace Renderer {
     }
 
 
+    static int CalculateMipLevels(int width, int height)
+    {
+        int max_dimension = glm::max(width, height);
+        int levels = static_cast<int>(glm::floor(glm::log2((float)max_dimension)));
 
+        return levels;
+    }
 
+    static void GenerateMipmaps(VkCommandBuffer command_buffer, VkImage image, int mip_levels, int width, int height)
+    {
+        VkImageSubresourceRange subresource_range{};
+        subresource_range.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        subresource_range.baseArrayLayer = 0;
+        subresource_range.layerCount = 1;
+        subresource_range.levelCount = 1;
+
+        int32_t mipWidth = width;
+        int32_t mipHeight = height;
+
+        for (int32_t i = 1; i < mip_levels; i++) {
+            subresource_range.baseMipLevel = i - 1;
+
+            TransitionImageLayout(command_buffer, image,
+                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                subresource_range, false);
+
+            VkImageBlit blit{};
+            blit.srcOffsets[0] = { 0, 0, 0 };
+            blit.srcOffsets[1] = { mipWidth, mipHeight, 1 };
+            blit.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            blit.srcSubresource.mipLevel = i - 1;
+            blit.srcSubresource.baseArrayLayer = 0;
+            blit.srcSubresource.layerCount = 1;
+            blit.dstOffsets[0] = { 0, 0, 0 };
+            blit.dstOffsets[1] = { mipWidth > 1 ? mipWidth / 2 : 1, mipHeight > 1 ? mipHeight / 2 : 1, 1 };
+            blit.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            blit.dstSubresource.mipLevel = i;
+            blit.dstSubresource.baseArrayLayer = 0;
+            blit.dstSubresource.layerCount = 1;
+
+            vkCmdBlitImage(command_buffer,
+                image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                1, &blit,
+                VK_FILTER_LINEAR);
+
+            TransitionImageLayout(command_buffer, image,
+                VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                subresource_range, false);
+
+            if (mipWidth > 1) mipWidth /= 2;
+            if (mipHeight > 1) mipHeight /= 2;
+        }
+
+        subresource_range.baseMipLevel = mip_levels - 1;
+        TransitionImageLayout(command_buffer, image,
+            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+            subresource_range, false);
+    }
 
 
     //
@@ -287,7 +352,7 @@ namespace Renderer {
     uint32_t gTexture_descriptor_counter = 0;
     void Texture::Create(const char* filepath)
     {
-        // note: right now we assume ONE array of textures for all textures in the game because we are using the globals 
+        // note: right now we assume ONE array of textures for all textures in the game because we are using the globals
         // - gDescriptor_image_infos
         // - gBindless_textures_set
         // - gTexture_descriptor_counter
@@ -324,56 +389,41 @@ namespace Renderer {
         memcpy(staging_data, pixels, imageSize);
         vmaFlushAllocation(gAllocator, staging_buffer.vma_allocation, 0, VK_WHOLE_SIZE);
         vmaUnmapMemory(gAllocator, staging_buffer.vma_allocation);
-
         stbi_image_free(pixels);
 
+        int mip_levels = CalculateMipLevels(width, height);
+
+
+        // Create Image
         VkImageCreateInfo ci_image = {};
         ci_image.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
         ci_image.imageType = VK_IMAGE_TYPE_2D;
-        ci_image.format = VK_FORMAT_R8G8B8A8_UNORM;
+        ci_image.format = format;
         ci_image.extent = { width, height, 1 };
-        ci_image.mipLevels = 1;
+        ci_image.mipLevels = mip_levels;
         ci_image.arrayLayers = 1;
         ci_image.samples = VK_SAMPLE_COUNT_1_BIT;
-        ci_image.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
-        ci_image.tiling = VK_IMAGE_TILING_OPTIMAL; // 0
-        ci_image.sharingMode = VK_SHARING_MODE_EXCLUSIVE; // 0
-        ci_image.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED; // 0
+        ci_image.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
 
         VmaAllocationCreateInfo ci_allocation = {};
         ci_allocation.usage = VMA_MEMORY_USAGE_GPU_ONLY;
         VKCHECK(vmaCreateImage(gAllocator, &ci_image, &ci_allocation, &image, &allocation, NULL));
 
 
-        VkImageViewCreateInfo ci_image_view = {};
-        ci_image_view.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-        ci_image_view.image = image;
-        ci_image_view.viewType = VK_IMAGE_VIEW_TYPE_2D;
-        ci_image_view.format = VK_FORMAT_R8G8B8A8_UNORM;
-        ci_image_view.components = {}; // VK_COMPONENT_SWIZZLE_IDENTITY = 0
-        ci_image_view.subresourceRange = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 };
-        VKCHECK(vkCreateImageView(gDevice, &ci_image_view, NULL, &view));
 
 
-        // begin staging command buffer
-        VkCommandBufferBeginInfo cmd_buffer_begin_info = {};
-        cmd_buffer_begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-        cmd_buffer_begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-
-        // fixme: we need thowaway command buffers
-        auto command_buffer = gFrames[0].graphics_command_buffer;
-        vkBeginCommandBuffer(command_buffer, &cmd_buffer_begin_info);
+        // Staging
+        auto command_buffer = BeginCommandBuffer();
 
         VkImageSubresourceRange subresource_range{};
         subresource_range.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
         subresource_range.baseMipLevel = 0;
+        subresource_range.levelCount = mip_levels;
         subresource_range.baseArrayLayer = 0;
-        subresource_range.levelCount = 1;
         subresource_range.layerCount = 1;
 
         TransitionImageLayout(command_buffer, image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, subresource_range, false);
 
-        // copy data
         VkBufferImageCopy buffer_image_copy{};
         buffer_image_copy.bufferOffset = 0;
         buffer_image_copy.bufferRowLength = 0;
@@ -383,23 +433,29 @@ namespace Renderer {
         buffer_image_copy.imageExtent = { (uint32_t)tex_width, (uint32_t)tex_height, 1 };
         vkCmdCopyBufferToImage(command_buffer, staging_buffer.handle, image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &buffer_image_copy);
 
-        TransitionImageLayout(command_buffer, image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, subresource_range, false);
+        GenerateMipmaps(command_buffer, image, mip_levels, width, height);
 
-
-
-        VKCHECK(vkEndCommandBuffer(gFrames[0].graphics_command_buffer));
-
-        // Submit command buffer and copy data from staging buffer to a vertex buffer
-        VkSubmitInfo submit_info{};
-        submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-        submit_info.commandBufferCount = 1;
-        submit_info.pCommandBuffers = &gFrames[0].graphics_command_buffer;
-        VKCHECK(vkQueueSubmit(gQueues._graphics, 1, &submit_info, VK_NULL_HANDLE));
-        vkDeviceWaitIdle(gDevice);
-
+        //TransitionImageLayout(command_buffer, image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, subresource_range, false);
+        FlushCommandBuffer(&command_buffer);
         vmaDestroyBuffer(gAllocator, staging_buffer.handle, staging_buffer.vma_allocation);
 
+        {
+            VkImageSubresourceRange subresource_range{};
+            subresource_range.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            subresource_range.baseMipLevel = 0;
+            subresource_range.levelCount = mip_levels;
+            subresource_range.baseArrayLayer = 0;
+            subresource_range.layerCount = 1;
 
+            VkImageViewCreateInfo ci_image_view = {};
+            ci_image_view.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+            ci_image_view.image = image;
+            ci_image_view.viewType = VK_IMAGE_VIEW_TYPE_2D;
+            ci_image_view.format = format;
+            ci_image_view.components = {}; // VK_COMPONENT_SWIZZLE_IDENTITY = 0
+            ci_image_view.subresourceRange = subresource_range;
+            VKCHECK(vkCreateImageView(gDevice, &ci_image_view, NULL, &view));
+        }
 
 
 
@@ -438,7 +494,7 @@ namespace Renderer {
         result = ktxTexture_CreateFromNamedFile(filepath, KTX_TEXTURE_CREATE_LOAD_IMAGE_DATA_BIT, &ktx_texture);
         assert(result == KTX_SUCCESS);
 
-        //format = ktxTexture_GetVkFormat(ktx_texture);
+        format = ktxTexture_GetVkFormat(ktx_texture);
         this->format = format;
         width = ktx_texture->baseWidth;
         height = ktx_texture->baseHeight;
@@ -509,14 +565,9 @@ namespace Renderer {
 
 
         // begin staging command buffer
-        VkCommandBufferBeginInfo cmd_buffer_begin_info = {};
-        cmd_buffer_begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-        cmd_buffer_begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-        // fixme: we need thowaway command buffers
+        auto command_buffer = BeginCommandBuffer();
 
-        vkBeginCommandBuffer(gFrames[0].graphics_command_buffer, &cmd_buffer_begin_info);
-
-        TransitionImageLayout(gFrames[0].graphics_command_buffer, image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, subresource_range, false);
+        TransitionImageLayout(command_buffer, image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, subresource_range, false);
 
         // Setup buffer copy regions for each face including all of its miplevels
         std::vector<VkBufferImageCopy> image_copy_regions;
@@ -542,19 +593,10 @@ namespace Renderer {
                 image_copy_regions.push_back(image_copy_region);
             }
         }
-        vkCmdCopyBufferToImage(gFrames[0].graphics_command_buffer, staging_buffer.handle, image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, static_cast<uint32_t>(image_copy_regions.size()), image_copy_regions.data());
+        vkCmdCopyBufferToImage(command_buffer, staging_buffer.handle, image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, static_cast<uint32_t>(image_copy_regions.size()), image_copy_regions.data());
 
-        TransitionImageLayout(gFrames[0].graphics_command_buffer, image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, subresource_range, false);
-
-        VKCHECK(vkEndCommandBuffer(gFrames[0].graphics_command_buffer));
-
-        // Submit command buffer and copy data from staging buffer to a vertex buffer
-        VkSubmitInfo submit_info{};
-        submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-        submit_info.commandBufferCount = 1;
-        submit_info.pCommandBuffers = &gFrames[0].graphics_command_buffer;
-        VKCHECK(vkQueueSubmit(gQueues._graphics, 1, &submit_info, VK_NULL_HANDLE));
-        vkDeviceWaitIdle(gDevice);
+        TransitionImageLayout(command_buffer, image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, subresource_range, false);
+        FlushCommandBuffer(&command_buffer);
 
         vmaDestroyBuffer(gAllocator, staging_buffer.handle, staging_buffer.vma_allocation);
 
@@ -574,8 +616,8 @@ namespace Renderer {
             ci_sampler.borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE;
             //If the samplerAnisotropy feature is not enabled, anisotropyEnable must be VK_FALSE
             // todo: investigate anisotropy feature
-            ci_sampler.anisotropyEnable = VK_FALSE;
-            ci_sampler.maxAnisotropy = 0;
+            ci_sampler.anisotropyEnable = VK_TRUE;
+            ci_sampler.maxAnisotropy = 8;
             VKCHECK(vkCreateSampler(gDevice, &ci_sampler, NULL, &gDefaultCubeSampler));
         }
 
@@ -705,6 +747,7 @@ namespace Renderer {
 
         auto anim = model->_current_animation;*/
 
+        assert(anim->handle);
         assert(anim->duration > 0);
         anim->isPlaying = true;
 
@@ -818,51 +861,121 @@ namespace Renderer {
 
 
 
-
+    // not to be messed with!
+    // it is automatically incremented and assigned as a "unique" id
+    // to each submesh of a unique mesh that is loaded (we cache meshes)
+    // so that the corresponding material data can be retieves in shaders
     static uint32_t global_instance_id = 0;
-    void Mesh::Create(const char* path)
+
+    void Mesh::Create(const char* mesh_filepath)
     {
-        if (gCgltfData.contains(path)) {
-            _mesh_data = (cgltf_data*)gCgltfData[path];
+        if (gCgltfData.contains(mesh_filepath)) {
+            _mesh_data = (cgltf_data*)gCgltfData[mesh_filepath];
 
         }
         else {
             cgltf_data* data;
-            LoadCgltfData(path, &data);
+            LoadCgltfData(mesh_filepath, &data);
 
-            gCgltfData.insert({ std::string(path), (void*)data });
+            gCgltfData.insert({ std::string(mesh_filepath), (void*)data });
             _mesh_data = data;
         }
 
-        if (gSharedMesh.contains(path)) {
-            SDL_Log("Mesh is already cached : %s", path);
+        if (gSharedMesh.contains(mesh_filepath)) {
+            SDL_Log("Mesh is already cached : %s", mesh_filepath);
             return;
         }
 
-        char* folder_path;
-        GetPathFolder(&folder_path, path, (uint32_t)strlen(path));
 
-
-        // size_t vertex_buffer_size = sizeof(triangle_vertices) + sizeof(triangle_indices);
         size_t vertex_buffer_size = _mesh_data->buffers->size;
 
+        VkBuffer staging_buffer;
+        VmaAllocation staging_buffer_allocation;
+        {
+            VkBufferCreateInfo buffer_ci{};
+            buffer_ci.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+            buffer_ci.size = vertex_buffer_size;
+            buffer_ci.usage |= VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+            buffer_ci.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
-        VkBufferCreateInfo buffer_ci{};
-        buffer_ci.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-        buffer_ci.size = vertex_buffer_size;
-        buffer_ci.usage |= VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
-        buffer_ci.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+            VmaAllocationCreateInfo vma_allocation_ci{};
+            vma_allocation_ci.flags |= VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
+            vma_allocation_ci.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
 
-        VmaAllocationCreateInfo vma_allocation_ci{};
-        vma_allocation_ci.flags |= VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
-        vma_allocation_ci.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
+            // TODO: upload to GPU exclusive memory instead of a mapped ptr!!!
 
-        // TODO: upload to GPU exclusive memory instead of a mapped ptr!!!
-        vmaCreateBuffer(gAllocator, &buffer_ci, &vma_allocation_ci, &vertex_buffer, &vertex_buffer_allocation, NULL);
-        void* mapped_vertex_buffer_ptr;
-        vmaMapMemory(gAllocator, vertex_buffer_allocation, &mapped_vertex_buffer_ptr);
-        memcpy(mapped_vertex_buffer_ptr, _mesh_data->buffers->data, vertex_buffer_size);
-        vmaUnmapMemory(gAllocator, vertex_buffer_allocation);
+            vmaCreateBuffer(gAllocator, &buffer_ci, &vma_allocation_ci, &staging_buffer, &staging_buffer_allocation, NULL);
+            void* mapped_vertex_buffer_ptr;
+            vmaMapMemory(gAllocator, staging_buffer_allocation, &mapped_vertex_buffer_ptr);
+
+            // for now, as a quick first pass, we load and keep the entire gltf .bin data
+            // in shared GPU memory, bad bad
+            // future improvements should upload geometry data to GPU exclusive vertex buffer (verts & indices in the same buffer)
+            // might call it geometry_buffer for lack of a better name.
+            // I haven't done the math to see if we should pre-cache ALL geometry data into a single buffer
+            memcpy(mapped_vertex_buffer_ptr, _mesh_data->buffers->data, vertex_buffer_size);
+            vmaUnmapMemory(gAllocator, staging_buffer_allocation);
+        }
+
+
+
+        // create & allocate vertex buffer
+        {
+
+            VkBufferCreateInfo buffer_ci{};
+            buffer_ci.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+            buffer_ci.size = vertex_buffer_size;
+            buffer_ci.usage |= VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+            buffer_ci.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+            VmaAllocationCreateInfo vma_allocation_ci{};
+            vma_allocation_ci.flags |= VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT;
+            vma_allocation_ci.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
+
+            // TODO: upload to GPU exclusive memory instead of a mapped ptr!!!
+
+            vmaCreateBuffer(gAllocator, &buffer_ci, &vma_allocation_ci, &vertex_buffer, &vertex_buffer_allocation, NULL);
+        }
+
+
+        VkBufferCopy2 copy_regions{};
+        copy_regions.sType = VK_STRUCTURE_TYPE_BUFFER_COPY_2;
+        copy_regions.pNext = NULL;
+        copy_regions.srcOffset = 0;
+        copy_regions.dstOffset = 0;
+        copy_regions.size = vertex_buffer_size;
+
+        VkCopyBufferInfo2 copy_buffer_info{};
+        copy_buffer_info.sType = VK_STRUCTURE_TYPE_COPY_BUFFER_INFO_2;
+        copy_buffer_info.pNext = NULL;
+        copy_buffer_info.srcBuffer = staging_buffer;
+        copy_buffer_info.dstBuffer = vertex_buffer;
+        copy_buffer_info.regionCount = 1;
+        copy_buffer_info.pRegions = &copy_regions;
+
+
+
+        VkCommandBufferBeginInfo cmd_buffer_begin_info = {};
+        cmd_buffer_begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+        cmd_buffer_begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+
+        VKCHECK(vkBeginCommandBuffer(gFrames[0].graphics_command_buffer, &cmd_buffer_begin_info));
+        vkCmdCopyBuffer2(gFrames[0].graphics_command_buffer, &copy_buffer_info);
+        VKCHECK(vkEndCommandBuffer(gFrames[0].graphics_command_buffer));
+
+        // Submit command buffer and copy data from staging buffer to a vertex buffer
+        VkSubmitInfo submit_info{};
+        submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+        submit_info.commandBufferCount = 1;
+        submit_info.pCommandBuffers = &gFrames[0].graphics_command_buffer;
+        VKCHECK(vkQueueSubmit(gQueues._graphics, 1, &submit_info, VK_NULL_HANDLE));
+        VKCHECK(vkDeviceWaitIdle(gDevice));
+
+
+
+
+
+
 
 
         _meshes.resize(_mesh_data->meshes_count);
@@ -914,12 +1027,15 @@ namespace Renderer {
                 // Material data
                 //
                 auto material_data = &mesh->material_data[submesh_idx];
-                if (!primitive->material) continue;
-                if (!primitive->material->has_pbr_metallic_roughness) {
+
+                bool material_data_is_null = !primitive->material;
+                if (material_data_is_null) continue;
+
+                bool no_mettalic_worklow = !primitive->material->has_pbr_metallic_roughness;
+                if (no_mettalic_worklow) {
                     SDL_Log("Only PBR Metal Roughness is supported: %s", _mesh_data->meshes[mesh_idx].primitives->material->name);
                     continue;
                 }
-
 
 
                 auto base_color_texture = primitive->material->pbr_metallic_roughness.base_color_texture.texture;
@@ -927,18 +1043,21 @@ namespace Renderer {
                 auto normal_texture = primitive->material->normal_texture.texture;
                 auto emissive_texture = primitive->material->emissive_texture.texture;
 
+                char* textures_folder_path;
+                GetPathFolder(&textures_folder_path, mesh_filepath, (uint32_t)strlen(mesh_filepath));
+
                 // fixme cache texture
                 if (base_color_texture) {
-                    LoadAndCacheTexture(&material_data->base_color_texture_idx, base_color_texture->image->uri, folder_path);
+                    LoadAndCacheTexture(&material_data->base_color_texture_idx, base_color_texture->image->uri, textures_folder_path);
                 }
                 if (metallic_roughness_texture) {
-                    LoadAndCacheTexture(&material_data->metallic_roughness_texture_idx, metallic_roughness_texture->image->uri, folder_path);
+                    LoadAndCacheTexture(&material_data->metallic_roughness_texture_idx, metallic_roughness_texture->image->uri, textures_folder_path);
                 }
                 if (normal_texture) {
-                    LoadAndCacheTexture(&material_data->metallic_roughness_texture_idx, normal_texture->image->uri, folder_path);
+                    LoadAndCacheTexture(&material_data->metallic_roughness_texture_idx, normal_texture->image->uri, textures_folder_path);
                 }
                 if (emissive_texture) {
-                    LoadAndCacheTexture(&material_data->metallic_roughness_texture_idx, emissive_texture->image->uri, folder_path);
+                    LoadAndCacheTexture(&material_data->metallic_roughness_texture_idx, emissive_texture->image->uri, textures_folder_path);
                 }
 
                 material_data->base_color_factor.r = primitive->material->pbr_metallic_roughness.base_color_factor[0];
@@ -1092,41 +1211,21 @@ namespace Renderer {
             buffers[4] = model->vertex_buffer;
             buffers[5] = model->vertex_buffer;
         }
-        // else
-        // {
-        //     buffers[0] = vertex_buffer;
-        //     buffers[1] = vertex_buffer;
-        //     buffers[2] = vertex_buffer;
-        //     buffers[3] = VK_NULL_HANDLE;
-        //     buffers[4] = VK_NULL_HANDLE;
-        //     buffers[5] = VK_NULL_HANDLE;
-        // }
+
         for (size_t mesh_idx = 0; mesh_idx < model->_meshes.size(); mesh_idx++) {
 
             for (size_t submesh_idx = 0; submesh_idx < model->_meshes[mesh_idx].index_count.size(); submesh_idx++) {
 
                 VkDeviceSize offsets[6]{};
-                // offsets to the start of non-interleaved attributes within same buffer
-                // if (_animations.size() > 0)
-                {
-                    /*POSITION  */ offsets[0] = model->_meshes[mesh_idx].POSITION_offset[submesh_idx];
-                    /*NORMAL    */ offsets[1] = model->_meshes[mesh_idx].NORMAL_offset[submesh_idx];
-                    /*TEXCOORD_0*/ offsets[2] = model->_meshes[mesh_idx].TEXCOORD_0_offset[submesh_idx];
-                    /*TEXCOORD_1*/ offsets[3] = model->_meshes[mesh_idx].TEXCOORD_1_offset[submesh_idx];
-                    /*JOINTS_0  */ offsets[4] = model->_meshes[mesh_idx].JOINTS_0_offset[submesh_idx];
-                    /*WEIGHTS_0 */ offsets[5] = model->_meshes[mesh_idx].WEIGHTS_0_offset[submesh_idx];
-                }
-                // else {
-                //     /*POSITION  */ offsets[0] = model->_meshes[mesh_idx].POSITION_offset[submesh_idx];
-                //     /*NORMAL    */ offsets[1] = model->_meshes[mesh_idx].NORMAL_offset[submesh_idx];
-                //     /*TEXCOORD_0*/ offsets[2] = model->_meshes[mesh_idx].TEXCOORD_0_offset[submesh_idx];
-                //     /*TEXCOORD_1*/ offsets[3] = 0;
-                //     /*JOINTS_0  */ offsets[4] = 0;
-                //     /*WEIGHTS_0 */ offsets[5] = 0;
-                // }
+                /*POSITION  */ offsets[0] = model->_meshes[mesh_idx].POSITION_offset[submesh_idx];
+                /*NORMAL    */ offsets[1] = model->_meshes[mesh_idx].NORMAL_offset[submesh_idx];
+                /*TEXCOORD_0*/ offsets[2] = model->_meshes[mesh_idx].TEXCOORD_0_offset[submesh_idx];
+                /*TEXCOORD_1*/ offsets[3] = model->_meshes[mesh_idx].TEXCOORD_1_offset[submesh_idx];
+                /*JOINTS_0  */ offsets[4] = model->_meshes[mesh_idx].JOINTS_0_offset[submesh_idx];
+                /*WEIGHTS_0 */ offsets[5] = model->_meshes[mesh_idx].WEIGHTS_0_offset[submesh_idx];
 
-                //DrawIndexed(buffers, ARR_COUNT(buffers), offsets, buffers[0], model->_meshes[mesh_idx].index_offset[submesh_idx], model->_meshes[mesh_idx].index_count[submesh_idx], &model->_meshes[mesh_idx].material_data[submesh_idx], model->_meshes[mesh_idx].instance_id);
-                // fixme provide SetMaterialData()
+
+                // fixme provide SetMaterialData() ?
                 ((MaterialData*)mapped_material_data_ptrs[gFrame_in_flight])[model->_meshes[mesh_idx].instance_id] = model->_meshes[mesh_idx].material_data[submesh_idx];
 
                 vkCmdBindVertexBuffers(gGraphics_cmd_buffer_in_flight, 0, ARR_COUNT(buffers), buffers, offsets);
@@ -1139,7 +1238,7 @@ namespace Renderer {
 
 
 
-    //Shader uses descriptor slot 3.0 (expected `VK_DESCRIPTOR_TYPE_SAMPLER, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER`) 
+    //Shader uses descriptor slot 3.0 (expected `VK_DESCRIPTOR_TYPE_SAMPLER, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER`)
     //but not declared in pipeline layout The Vulkan spec states : layout must be consistent with all shaders specified in pStages
 
 
@@ -1211,22 +1310,33 @@ namespace Renderer {
         TransitionImageLayout(gGraphics_cmd_buffer_in_flight, gSwapchain._images[gFrames[gFrame_in_flight].image_idx],
             VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL, subresource_range, false);
 
+        TransitionImageLayout(gGraphics_cmd_buffer_in_flight, gSwapchain._msaa_image.handle,
+            VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL, subresource_range, false);
 
 
         VkClearValue clear_values[2] = {};
         clear_values[0].color = { .13f, .13f, .13f, 1.f };
 
-        VkRenderingAttachmentInfo color_attachment_info = {};
-        color_attachment_info.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
-        color_attachment_info.imageView = gSwapchain._image_views[gFrames[gFrame_in_flight].image_idx];
-        color_attachment_info.imageLayout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL_KHR;
-        color_attachment_info.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-        color_attachment_info.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-        color_attachment_info.clearValue = clear_values[0];
+        VkRenderingAttachmentInfo color_attachment_info[2] = {};
 
-        color_attachment_info.resolveImageLayout;
-        color_attachment_info.resolveImageView; // https://vulkan-tutorial.com/Multisampling
-        color_attachment_info.resolveMode;
+        color_attachment_info[0].sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+        color_attachment_info[0].imageView = gSwapchain._msaa_image_view;
+        color_attachment_info[0].imageLayout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL_KHR;
+        color_attachment_info[0].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+        color_attachment_info[0].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+        color_attachment_info[0].clearValue = clear_values[0];
+
+        color_attachment_info[0].resolveImageLayout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL_KHR;
+        color_attachment_info[0].resolveImageView = gSwapchain._image_views[gFrames[gFrame_in_flight].image_idx];
+        color_attachment_info[0].resolveMode = VK_RESOLVE_MODE_AVERAGE_BIT;
+
+        /*color_attachment_info[1].sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+        color_attachment_info[1].imageView = gSwapchain._msaa_image_view;
+        color_attachment_info[1].imageLayout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL_KHR;
+        color_attachment_info[1].loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+        color_attachment_info[1].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+        color_attachment_info[1].clearValue = clear_values[0];
+*/
 
         clear_values[1].depthStencil.depth = { 1.f };
 
@@ -1243,7 +1353,7 @@ namespace Renderer {
         rendering_info.renderArea.extent = { WIDTH, HEIGHT };
         rendering_info.layerCount = 1;
         rendering_info.colorAttachmentCount = 1;
-        rendering_info.pColorAttachments = &color_attachment_info;
+        rendering_info.pColorAttachments = &color_attachment_info[0];
         rendering_info.pDepthAttachment = &depth_attachment_info;
         rendering_info.pStencilAttachment; // todo
         vkCmdBeginRendering(gGraphics_cmd_buffer_in_flight, &rendering_info);
@@ -1295,6 +1405,8 @@ namespace Renderer {
         subresource_range.layerCount = 1;
 
         TransitionImageLayout(gGraphics_cmd_buffer_in_flight, gSwapchain._images[gFrames[gFrame_in_flight].image_idx], VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, subresource_range, false);
+        TransitionImageLayout(gGraphics_cmd_buffer_in_flight, gSwapchain._msaa_image.handle, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, subresource_range, false);
+
         VKCHECK(vkEndCommandBuffer(gGraphics_cmd_buffer_in_flight));
 
 
@@ -1653,7 +1765,7 @@ namespace Renderer {
             for (size_t i = 0; i < device_properties_count; i++) {
                 if (strcmp(device_extension_properties[i].extensionName, VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME) == 0)
                     SDL_Log("%d: %s\n", device_extension_properties[i].specVersion, device_extension_properties[i].extensionName);
-        }
+            }
 #endif
 
             const float queue_priorities[] = {
@@ -1681,7 +1793,8 @@ namespace Renderer {
             create_info_device_queues.push_back(ci_compute_queue);
 
 
-
+            VkPhysicalDeviceFeatures enabled_physical_device_features{};
+            enabled_physical_device_features.samplerAnisotropy = VK_TRUE;
 
 
             // VkPhysicalDeviceVulkan11Features gpu_vulkan_11_features {};
@@ -1728,8 +1841,7 @@ namespace Renderer {
             create_info_device.pQueueCreateInfos = &create_info_device_queues[0];
             create_info_device.enabledExtensionCount = ARR_COUNT(enabled_device_extension_names);
             create_info_device.ppEnabledExtensionNames = enabled_device_extension_names;
-            // create_info_device.pEnabledFeatures        = &supported_gpu_features;
-            create_info_device.pEnabledFeatures = NULL;
+            create_info_device.pEnabledFeatures = &enabled_physical_device_features;
 
             VKCHECK(vkCreateDevice(gPhysical_device, &create_info_device, NULL, &gDevice));
 
@@ -1741,7 +1853,7 @@ namespace Renderer {
                 gQueues._present = gQueues._graphics;
             }
             vkGetDeviceQueue(gDevice, gQueues._compute_queue_family_idx, 0, &gQueues._compute);
-    }
+        }
 
 
 
@@ -2099,21 +2211,24 @@ namespace Renderer {
             vkCreateDescriptorSetLayout(gDevice, &create_info_desc_set_layout, NULL, &gBindless_textures_set_layout);
 
             {
-
                 // default Sampler
                 VkSamplerCreateInfo ci_sampler = {};
                 ci_sampler.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
                 ci_sampler.minFilter = VK_FILTER_LINEAR;
-                ci_sampler.magFilter = VK_FILTER_LINEAR;
+                ci_sampler.magFilter = VK_FILTER_NEAREST;
                 ci_sampler.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
                 ci_sampler.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-                ci_sampler.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-                ci_sampler.mipmapMode = VK_SAMPLER_MIPMAP_MODE_NEAREST;
+                ci_sampler.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+                ci_sampler.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+                ci_sampler.borderColor = VK_BORDER_COLOR_FLOAT_TRANSPARENT_BLACK;
+                ci_sampler.maxLod = 10.f;
+                ci_sampler.mipLodBias = 0.f;
+                ci_sampler.compareOp = VK_COMPARE_OP_ALWAYS;
 
                 //If the samplerAnisotropy feature is not enabled, anisotropyEnable must be VK_FALSE
                 // todo: investigate anisotropy feature
-                ci_sampler.anisotropyEnable = VK_FALSE;
-                ci_sampler.maxAnisotropy = 0;
+                ci_sampler.anisotropyEnable = VK_TRUE;
+                ci_sampler.maxAnisotropy = 8;
                 VKCHECK(vkCreateSampler(gDevice, &ci_sampler, NULL, &gDefaultSampler));
             }
 
@@ -2141,7 +2256,7 @@ namespace Renderer {
             // fixme: duplicate -> See Texture::Create(...)
             // gBindless_textures_set is written here because it needs to be "initialized"
             // before it can ever be used.
-            // Then with each new texture that is created gBindless_textures_set is rewritten with an 
+            // Then with each new texture that is created gBindless_textures_set is rewritten with an
             // updated gDescriptor_image_infos
             {
                 VkWriteDescriptorSet setWrites[2]{};
@@ -2176,7 +2291,7 @@ namespace Renderer {
         CreateGraphicsPipeline(gDevice, &gDefault_graphics_pipeline);
 
         return 1;
-}
+    }
 
     void Swapchain::Create(VkDevice device, VkPhysicalDevice physical_device, VkSurfaceKHR surface, VkSwapchainKHR old_swapchain)
     {
@@ -2248,7 +2363,7 @@ namespace Renderer {
 
 
         //
-        // image views
+        // swapchain image views
         //
         _image_views.resize(_image_count);
 
@@ -2257,7 +2372,7 @@ namespace Renderer {
             view_ci.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
             view_ci.image = _images[i];
             view_ci.viewType = VK_IMAGE_VIEW_TYPE_2D;
-            view_ci.format = VK_FORMAT_B8G8R8A8_UNORM;
+            view_ci.format = _format;
 
             view_ci.components.r = VK_COMPONENT_SWIZZLE_R;
             view_ci.components.g = VK_COMPONENT_SWIZZLE_G;
@@ -2270,6 +2385,60 @@ namespace Renderer {
             view_ci.subresourceRange.layerCount = 1;
             VKCHECK(vkCreateImageView(device, &view_ci, NULL, &_image_views[i]));
         }
+
+        //
+        // MSAA image
+        //
+
+        if (_msaa_image.handle != VK_NULL_HANDLE && old_swapchain != VK_NULL_HANDLE) {
+            vkDestroyImageView(device, _msaa_image_view, nullptr);
+            vmaDestroyImage(gAllocator, _msaa_image.handle, _msaa_image.vma_allocation);
+        }
+
+        VkImageCreateInfo resolve_image_ci{};
+        resolve_image_ci.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+        resolve_image_ci.imageType = VK_IMAGE_TYPE_2D;
+        resolve_image_ci.format = _format;
+
+        resolve_image_ci.extent.width = WIDTH;
+        resolve_image_ci.extent.height = HEIGHT;
+        resolve_image_ci.extent.depth = 1;
+
+        resolve_image_ci.mipLevels = 1;
+        resolve_image_ci.arrayLayers = 1;
+        resolve_image_ci.samples = sample_count;
+        resolve_image_ci.tiling = VK_IMAGE_TILING_OPTIMAL; // use VK_IMAGE_TILING_LINEAR if CPU writes are intended
+        resolve_image_ci.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT;
+        resolve_image_ci.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+        // resolve_image_ci.queueFamilyIndexCount;
+        // resolve_image_ci.pQueueFamilyIndices;
+        resolve_image_ci.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+
+        VmaAllocationCreateInfo vma_msaa_image_alloc_ci{};
+        vma_msaa_image_alloc_ci.usage = VMA_MEMORY_USAGE_GPU_ONLY;
+        vma_msaa_image_alloc_ci.requiredFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+
+        VKCHECK(vmaCreateImage(gAllocator, &resolve_image_ci, &vma_msaa_image_alloc_ci, &_msaa_image.handle, &_msaa_image.vma_allocation, NULL));
+
+        VkImageViewCreateInfo resolve_view_ci{};
+        resolve_view_ci.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+        resolve_view_ci.image = _msaa_image.handle;
+        resolve_view_ci.viewType = VK_IMAGE_VIEW_TYPE_2D;
+        resolve_view_ci.format = _format;
+
+        resolve_view_ci.components.r = VK_COMPONENT_SWIZZLE_R;
+        resolve_view_ci.components.g = VK_COMPONENT_SWIZZLE_G;
+        resolve_view_ci.components.b = VK_COMPONENT_SWIZZLE_B;
+        resolve_view_ci.components.a = VK_COMPONENT_SWIZZLE_A;
+        resolve_view_ci.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        resolve_view_ci.subresourceRange.levelCount = 1;
+        resolve_view_ci.subresourceRange.layerCount = 1;
+        VKCHECK(vkCreateImageView(device, &resolve_view_ci, NULL, &_msaa_image_view));
+
+
+
+
+
 
         //
         // Depth image
@@ -2291,7 +2460,7 @@ namespace Renderer {
 
         depth_image_ci.mipLevels = 1;
         depth_image_ci.arrayLayers = 1;
-        depth_image_ci.samples = VK_SAMPLE_COUNT_1_BIT;
+        depth_image_ci.samples = sample_count;
         depth_image_ci.tiling = VK_IMAGE_TILING_OPTIMAL; // use VK_IMAGE_TILING_LINEAR if CPU writes are intended
         depth_image_ci.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
         depth_image_ci.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
@@ -2406,6 +2575,7 @@ namespace Renderer {
         raster_state_ci.depthBiasClamp;
         raster_state_ci.depthBiasSlopeFactor;
         raster_state_ci.lineWidth = 1.f;
+
 
         //
         // Vertex input state - Non-interleaved, so we must bind each vertex attribute to a different slot
@@ -2598,7 +2768,7 @@ namespace Renderer {
         //
         VkPipelineMultisampleStateCreateInfo multisample_state_ci{};
         multisample_state_ci.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
-        multisample_state_ci.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+        multisample_state_ci.rasterizationSamples = sample_count; // fixme: hardoded
         multisample_state_ci.sampleShadingEnable = VK_FALSE;
         multisample_state_ci.minSampleShading;
         multisample_state_ci.pSampleMask;
@@ -2645,6 +2815,32 @@ namespace Renderer {
     /////////////////////////////////
     // vulkan utility functions
 
+    // Allocates one primary command buffer from global graphics command pool
+    // assumed to handle transfer operations
+
+    static VkCommandBuffer BeginCommandBuffer()
+    {
+        VkCommandBufferBeginInfo cmd_buffer_begin_info = {};
+        cmd_buffer_begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+        cmd_buffer_begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+
+        // fixme: we need thowaway command buffers
+        auto command_buffer = gFrames[0].graphics_command_buffer;
+        vkBeginCommandBuffer(command_buffer, &cmd_buffer_begin_info);
+        return command_buffer;
+    }
+
+    static void FlushCommandBuffer(const VkCommandBuffer* command_buffer)
+    {
+        VKCHECK(vkEndCommandBuffer(*command_buffer));
+        VkSubmitInfo submit_info{};
+        submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+        submit_info.commandBufferCount = 1;
+        submit_info.pCommandBuffers = command_buffer;
+        VKCHECK(vkQueueSubmit(gQueues._graphics, 1, &submit_info, VK_NULL_HANDLE));
+        vkDeviceWaitIdle(gDevice);
+    }
+
     static VkResult CreateBuffer(Buffer* buffer, VkDeviceSize size, VkBufferUsageFlags buffer_usage, VmaAllocationCreateFlags allocation_flags, VmaMemoryUsage memory_usage)
     {
         VkBufferCreateInfo buffer_ci{};
@@ -2673,15 +2869,6 @@ namespace Renderer {
         barrier.image = image;
         barrier.subresourceRange = subresource_range;
 
-        // todo: we can keep this here instead of being an argument
-        // but requires 2 additional function arguments: (..., is_cube, mip_levels)
-
-        //barrier.subresourceRange.aspectMask = is_depth ? VK_IMAGE_ASPECT_DEPTH_BIT : VK_IMAGE_ASPECT_COLOR_BIT;
-        //barrier.subresourceRange.baseMipLevel = 0;
-        //barrier.subresourceRange.baseArrayLayer = 0;
-        //barrier.subresourceRange.levelCount = 1;
-        //barrier.subresourceRange.layerCount = 1;
-
         barrier.srcStageMask = VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT;
         barrier.dstStageMask = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;
 
@@ -2707,7 +2894,6 @@ namespace Renderer {
                 barrier.srcStageMask = VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT;
                 barrier.dstStageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
             }
-
         }
         else if (old_layout & (VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL | VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL)) {
             if (new_layout == VK_IMAGE_LAYOUT_PRESENT_SRC_KHR) {
@@ -2719,13 +2905,33 @@ namespace Renderer {
             }
         }
 
+        else if (old_layout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL) {
+            if (new_layout == VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL) {
+                barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+                barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
 
-        else if (old_layout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL && new_layout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) {
-            barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-            barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+                barrier.srcStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
+                barrier.dstStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
+            }
 
-            barrier.srcStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
-            barrier.dstStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+            if (new_layout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) {
+                barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+                barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+
+                barrier.srcStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
+                barrier.dstStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+            }
+        }
+        else if (old_layout == VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL)
+        {
+            if (new_layout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) {
+
+                barrier.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+                barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+
+                barrier.srcStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
+                barrier.dstStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+            }
         }
         else {
             SDL_Log("Unsupported layout transition!");

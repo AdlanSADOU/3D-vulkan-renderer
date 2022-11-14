@@ -217,15 +217,14 @@ namespace Renderer {
         // creating GPU buffers for the same Mesh multiple times
         VkBuffer      vertex_buffer;
         VmaAllocation vertex_buffer_allocation;
-
         cgltf_data* _mesh_data; // fixme: dont need to store this member. removing it would allow us to remove cgltf from the public interface
 
         struct SkinnedMesh
         {
             // this id is passed as 'baseInstance' for every drawn mesh 
-            // which can be retrieved with gl_BaseInstance in the shader
-            // it allows to link a material to a given submesh within a Mesh
-            // in the fragment shader
+            // through vkCmdDrawIndexed(..., firstInstance)
+            // which can be retrieved with gl_BaseInstance in the vertex shader
+            // it is a way to identify a submesh within a Mesh so that we can retieve its material data
             uint32_t instance_id;
 
             std::vector<MaterialData> material_data{};

@@ -1,0 +1,12 @@
+- NEED EASY COMMAND BUFFERS
+- EASY BUFFER CREATION
+- EASY STAGING
+
+- shadows
+- multisampling
+- tonemapping
+- anisotropy
+- imgui
+- font rendering /freetype
+- Frustum culling?
+- Occlusion culling?
