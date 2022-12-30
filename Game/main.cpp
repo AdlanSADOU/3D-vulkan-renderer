@@ -1,7 +1,7 @@
 #include <vector>
 #include <SDL2/SDL.h>
 #include "vk_renderer.h"
-
+#include <windows.h>
 
 struct Entity
 {
@@ -27,7 +27,6 @@ Renderer::Mesh warrior;
 Renderer::Mesh terrain;
 Renderer::Mesh hache;
 
-
 Renderer::Camera camera{};
 Renderer::Input input = {}; // fixme: tied to Renderer because Camera uses it!!
 
@@ -40,16 +39,16 @@ extern int main(int argc, char** argv)
     Renderer::SetWindowSize(width, height);
     Renderer::InitRenderer();
 
-    camera.CameraCreate({ 0, 0, 0 }, 45.f, width / (float)height, .8f, 4000.f);
+    camera.CameraCreate({ 0, 0, 0 }, glm::radians(65.f), width / (float)height, .8f, 4000.f);
     camera.mode = Renderer::Camera::CameraMode::THIRD_PERSON;
     camera._pitch = -40;
     SetActiveCamera(&camera);
-
 
     skybox_texture.CreateCubemapKTX("assets/skybox/skybox.ktx", VK_FORMAT_R8G8B8A8_UNORM);
     skybox_mesh.Create("assets/skybox/cube.gltf");
     skybox.mesh = skybox_mesh;
     skybox.object_idx = 1024 - 1;
+    skybox.transform.translation = { 0, -.22, 0 };
     skybox.transform.scale = glm::vec3(1.);
     skybox.push_constants.is_skybox = 1;
     //skybox.mesh._meshes[0].material_data[0].base_color_texture_idx = skybox_texture.descriptor_array_idx;
@@ -93,29 +92,24 @@ extern int main(int argc, char** argv)
             entities[i].object_idx = i;
             entities[i].mesh._meshes[0].material_data[0].tiling_x = 32;
             entities[i].mesh._meshes[0].material_data[0].tiling_y = 32;
-
         }
         else {
-            //entities[i].mesh = hache;
-            //// then the following line will crash
-            //entities[i].transform.translation = { startingOffset + (x - 2) * distanceFactor, 16.f, startingOffset + z * distanceFactor };
-            //entities[i].transform.rotation = glm::quat({ glm::radians(90.f), glm::radians(90.f), 0});
-            //entities[i].transform.scale = glm::vec3(3);
-            //entities[i].object_idx = i;
-
-            entities[i].mesh = warrior;
+            entities[i].mesh = hache;
             // then the following line will crash
-            entities[i].transform.translation = { startingOffset + x * distanceFactor, 0.f, startingOffset + z * distanceFactor };
-            entities[i].transform.rotation = glm::quat({ 0, 0, 0 });
-            entities[i].transform.scale = glm::vec3(.10f);
+            entities[i].transform.translation = { startingOffset + (x - 2) * distanceFactor, 16.f, startingOffset + z * distanceFactor };
+            entities[i].transform.rotation = glm::quat({ glm::radians(90.f), glm::radians(90.f), 0 });
+            entities[i].transform.scale = glm::vec3(3);
             entities[i].object_idx = i;
 
-            entities[i].mesh._current_animation = &entities[i].mesh._animations[0];
-            entities[i].mesh._should_play_animation = true;
+            //entities[i].mesh = warrior;
+            //// then the following line will crash
+            //entities[i].transform.translation = { startingOffset + x * distanceFactor, 0.f, startingOffset + z * distanceFactor };
+            //entities[i].transform.rotation = glm::quat({ 0, 0, 0 });
+            //entities[i].transform.scale = glm::vec3(.10f);
+            //entities[i].object_idx = i;
 
             //entities[i].mesh._current_animation = &entities[i].mesh._animations[0];
             //entities[i].mesh._should_play_animation = true;
-
         }
     }
 
@@ -217,10 +211,17 @@ extern int main(int argc, char** argv)
         if (window_minimized) continue;
 
 
+
+        if (input.E) {
+            Renderer::CreateGraphicsPipeline(Renderer::gDevice, &Renderer::gDefault_graphics_pipeline);
+        }
+
+
         Renderer::BeginRendering();
         UpdateAndRenderGame(dt, &input);
         Renderer::EndRendering();
 
+        //SDL_Log("camp: (%f, %f, %f)\n", camera._position.x, camera._position.y, camera._position.z);
 
 
 
@@ -323,20 +324,23 @@ void UpdateAndRenderGame(float dt, Renderer::Input* input)
 
         entities[i].object_data.model_matrix = model_matrix;
 
-        Renderer::PushConstants constants;
-        constants.object_idx = entities[i].object_idx;
+        Renderer::PushConstants push_constants;
+        push_constants.object_idx = entities[i].object_idx;
 
-        if (entities[i].mesh._current_animation) {
-            AnimationUpdate(entities[i].mesh._current_animation, dt);
+        // handle animation, if any
+        auto current_animation = entities[i].mesh._current_animation;
+        if (current_animation) {
+            AnimationUpdate(current_animation, dt);
 
-            constants.has_joints = 1;
-            auto joint_matrices = entities[i].mesh._current_animation->joint_matrices;
-            for (size_t mat_idx = 0; mat_idx < joint_matrices.size(); mat_idx++) {
-                entities[i].object_data.joint_matrices[mat_idx] = joint_matrices[mat_idx];
-            }
+            push_constants.has_joints = 1;
+
+            memcpy(
+                entities[i].object_data.joint_matrices,
+                current_animation->joint_matrices,
+                sizeof(glm::mat4) * Renderer::MAX_JOINTS);
         }
 
-        Renderer::SetPushConstants(&constants);
+        Renderer::SetPushConstants(&push_constants);
         Renderer::SetObjectData(&entities[i].object_data, entities[i].object_idx);
         Renderer::Draw(&entities[i].mesh);
     }

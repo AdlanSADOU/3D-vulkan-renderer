@@ -15,6 +15,7 @@ namespace Renderer {
     {
         glm::mat4 projection;
         glm::mat4 view;
+        glm::vec3 camera_position;
     };
 
     struct ObjectData
@@ -135,6 +136,7 @@ namespace Renderer {
     //
     // Animation
     //
+    const int MAX_JOINTS = 128;
     struct TranslationChannel
     {
         float* timestamps;
@@ -183,7 +185,7 @@ namespace Renderer {
 
         std::vector<Joint> _joints;
 
-        std::vector<glm::mat4> joint_matrices;
+        glm::mat4 joint_matrices[MAX_JOINTS];
     };
 
 
@@ -245,6 +247,11 @@ namespace Renderer {
         void Create(const char* path);
     };
 
+    extern VkPipeline       gDefault_graphics_pipeline;
+    extern VkDevice         gDevice;
+
+    // experimental
+    void CreateGraphicsPipeline(VkDevice device, VkPipeline* pipeline);
 
     bool InitRenderer();
     void SetWindowSize(int width, int height);

@@ -31,11 +31,10 @@ VkSampleCountFlagBits sample_count = VK_SAMPLE_COUNT_8_BIT;
 
 namespace Renderer {
 
-
     // this is where resources are cached right now
     std::unordered_map<std::string, void*>    gCgltfData;
-    std::unordered_map<std::string, Mesh*>    gSharedMesh;
     std::unordered_map<std::string, void*>    gSharedMeshes;
+    std::unordered_map<std::string, Mesh*>    gSharedMesh;
     std::unordered_map<std::string, Texture*> gTextures;
 
     static Camera* gActive_camera = NULL;
@@ -59,7 +58,7 @@ namespace Renderer {
     static VkInstance       gInstance;
     static VkSurfaceKHR     gSurface;
     static VkPhysicalDevice gPhysical_device;
-    static VkDevice         gDevice;
+    VkDevice         gDevice;
     static VmaAllocator     gAllocator;
 
 
@@ -374,7 +373,7 @@ namespace Renderer {
         width = (uint32_t)tex_width;
         height = (uint32_t)tex_height;
         num_channels = texChannels;
-        format = VK_FORMAT_R8G8B8A8_UNORM;
+        format = VK_FORMAT_R8G8B8A8_SRGB;
 
 
 
@@ -404,7 +403,7 @@ namespace Renderer {
         ci_image.arrayLayers = 1;
         ci_image.samples = VK_SAMPLE_COUNT_1_BIT;
         ci_image.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
-
+        ci_image.tiling = VK_IMAGE_TILING_OPTIMAL;
         VmaAllocationCreateInfo ci_allocation = {};
         ci_allocation.usage = VMA_MEMORY_USAGE_GPU_ONLY;
         VKCHECK(vmaCreateImage(gAllocator, &ci_image, &ci_allocation, &image, &allocation, NULL));
@@ -494,8 +493,9 @@ namespace Renderer {
         result = ktxTexture_CreateFromNamedFile(filepath, KTX_TEXTURE_CREATE_LOAD_IMAGE_DATA_BIT, &ktx_texture);
         assert(result == KTX_SUCCESS);
 
-        format = ktxTexture_GetVkFormat(ktx_texture);
+        //format = ktxTexture_GetVkFormat(ktx_texture);
         this->format = format;
+        //this->format = VK_FORMAT_R8G8B8A8_UNORM;
         width = ktx_texture->baseWidth;
         height = ktx_texture->baseHeight;
         mip_levels = ktx_texture->numLevels;
@@ -504,7 +504,6 @@ namespace Renderer {
 
 
         VkFormat ktxformat = ktxTexture_GetVkFormat(ktx_texture);
-        printf("ktxTexture_GetVkFormat: %d, format: %d", ktxformat, format);
 
 
 
@@ -523,7 +522,7 @@ namespace Renderer {
         VkImageCreateInfo ci_image{};
         ci_image.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
         ci_image.imageType = VK_IMAGE_TYPE_2D;
-        ci_image.format = format;
+        ci_image.format = this->format;
         ci_image.mipLevels = mip_levels;
         ci_image.samples = VK_SAMPLE_COUNT_1_BIT;
         ci_image.tiling = VK_IMAGE_TILING_OPTIMAL;
@@ -552,7 +551,7 @@ namespace Renderer {
         VkImageViewCreateInfo ci_image_view = {};
         ci_image_view.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
         ci_image_view.image = image;
-        ci_image_view.format = format;
+        ci_image_view.format = this->format;
         ci_image_view.viewType = VK_IMAGE_VIEW_TYPE_CUBE;
         ci_image_view.components = { VK_COMPONENT_SWIZZLE_R, VK_COMPONENT_SWIZZLE_G, VK_COMPONENT_SWIZZLE_B, VK_COMPONENT_SWIZZLE_A };
         ci_image_view.subresourceRange = subresource_range;
@@ -1054,10 +1053,10 @@ namespace Renderer {
                     LoadAndCacheTexture(&material_data->metallic_roughness_texture_idx, metallic_roughness_texture->image->uri, textures_folder_path);
                 }
                 if (normal_texture) {
-                    LoadAndCacheTexture(&material_data->metallic_roughness_texture_idx, normal_texture->image->uri, textures_folder_path);
+                    LoadAndCacheTexture(&material_data->normal_texture_idx, normal_texture->image->uri, textures_folder_path);
                 }
                 if (emissive_texture) {
-                    LoadAndCacheTexture(&material_data->metallic_roughness_texture_idx, emissive_texture->image->uri, textures_folder_path);
+                    LoadAndCacheTexture(&material_data->emissive_texture_idx, emissive_texture->image->uri, textures_folder_path);
                 }
 
                 material_data->base_color_factor.r = primitive->material->pbr_metallic_roughness.base_color_factor[0];
@@ -1099,9 +1098,7 @@ namespace Renderer {
             anim->duration = AnimationGetClipDuration(&data->animations[animation_idx]);
 
 
-            anim->joint_matrices.resize(data->skins->joints_count);
-
-            for (size_t i = 0; i < anim->joint_matrices.size(); i++) {
+            for (size_t i = 0; i < MAX_JOINTS; i++) {
                 anim->joint_matrices[i] = glm::mat4(1);
             }
         }
@@ -1373,9 +1370,13 @@ namespace Renderer {
         vkCmdBindDescriptorSets(gGraphics_cmd_buffer_in_flight, VK_PIPELINE_BIND_POINT_GRAPHICS, gDefault_graphics_pipeline_layout, 2, 1, &gMaterial_data_sets[gFrame_in_flight], 0, NULL);
         vkCmdBindDescriptorSets(gGraphics_cmd_buffer_in_flight, VK_PIPELINE_BIND_POINT_GRAPHICS, gDefault_graphics_pipeline_layout, 3, 1, &gBindless_textures_set, 0, NULL);
 
-        ((GlobalUniforms*)mapped_view_proj_ptrs[gFrame_in_flight])->projection = gActive_camera->_projection;
-        ((GlobalUniforms*)mapped_view_proj_ptrs[gFrame_in_flight])->view = gActive_camera->_view;
-        ((GlobalUniforms*)mapped_view_proj_ptrs[gFrame_in_flight])->projection[1][1] *= -1;
+        auto global_uniforms = ((GlobalUniforms*)mapped_view_proj_ptrs[gFrame_in_flight]);
+        global_uniforms->projection = gActive_camera->_projection;
+        global_uniforms->view = gActive_camera->_view;
+        global_uniforms->projection[1][1] *= -1;
+        //global_uniforms->camera_position = { global_uniforms->view[3][0], global_uniforms->view[3][1], global_uniforms->view[3][2] };
+        global_uniforms->camera_position = { gActive_camera->_position.x, gActive_camera->_position.y, gActive_camera->_position.z };
+        //SDL_Log("view: (%f, %f, %f)\n", gActive_camera->_position.x, gActive_camera->_position.y, gActive_camera->_position.z);
 
         VkViewport viewport{};
         viewport.minDepth = 0;
@@ -1666,7 +1667,7 @@ namespace Renderer {
             vkGetPhysicalDeviceFeatures(gGpu._physical_device, &gGpu._features);
 
             gGpu._features2 = physical_device_features2.features;
-        }
+            }
 
 
 
@@ -1765,7 +1766,7 @@ namespace Renderer {
             for (size_t i = 0; i < device_properties_count; i++) {
                 if (strcmp(device_extension_properties[i].extensionName, VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME) == 0)
                     SDL_Log("%d: %s\n", device_extension_properties[i].specVersion, device_extension_properties[i].extensionName);
-            }
+        }
 #endif
 
             const float queue_priorities[] = {
@@ -2386,39 +2387,45 @@ namespace Renderer {
             VKCHECK(vkCreateImageView(device, &view_ci, NULL, &_image_views[i]));
         }
 
+
+        // Release MSAA and Depth image allocations
+        if (old_swapchain != VK_NULL_HANDLE) {
+            vkDeviceWaitIdle(gDevice);
+
+            vkDestroyImageView(device, _msaa_image_view, nullptr);
+            vmaDestroyImage(gAllocator, _msaa_image.handle, _msaa_image.vma_allocation);
+
+            vkDestroyImageView(device, _depth_image_view, nullptr);
+            vmaDestroyImage(gAllocator, _depth_image.handle, _depth_image.vma_allocation);
+        }
+
+
         //
         // MSAA image
         //
 
-        if (_msaa_image.handle != VK_NULL_HANDLE && old_swapchain != VK_NULL_HANDLE) {
-            vkDestroyImageView(device, _msaa_image_view, nullptr);
-            vmaDestroyImage(gAllocator, _msaa_image.handle, _msaa_image.vma_allocation);
-        }
+        VkImageCreateInfo msaa_image_ci{};
+        msaa_image_ci.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+        msaa_image_ci.imageType = VK_IMAGE_TYPE_2D;
+        msaa_image_ci.format = _format;
 
-        VkImageCreateInfo resolve_image_ci{};
-        resolve_image_ci.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-        resolve_image_ci.imageType = VK_IMAGE_TYPE_2D;
-        resolve_image_ci.format = _format;
+        msaa_image_ci.extent.width = WIDTH;
+        msaa_image_ci.extent.height = HEIGHT;
+        msaa_image_ci.extent.depth = 1;
 
-        resolve_image_ci.extent.width = WIDTH;
-        resolve_image_ci.extent.height = HEIGHT;
-        resolve_image_ci.extent.depth = 1;
-
-        resolve_image_ci.mipLevels = 1;
-        resolve_image_ci.arrayLayers = 1;
-        resolve_image_ci.samples = sample_count;
-        resolve_image_ci.tiling = VK_IMAGE_TILING_OPTIMAL; // use VK_IMAGE_TILING_LINEAR if CPU writes are intended
-        resolve_image_ci.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT;
-        resolve_image_ci.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-        // resolve_image_ci.queueFamilyIndexCount;
-        // resolve_image_ci.pQueueFamilyIndices;
-        resolve_image_ci.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+        msaa_image_ci.mipLevels = 1;
+        msaa_image_ci.arrayLayers = 1;
+        msaa_image_ci.samples = sample_count;
+        msaa_image_ci.tiling = VK_IMAGE_TILING_OPTIMAL;
+        msaa_image_ci.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT;
+        msaa_image_ci.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+        msaa_image_ci.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 
         VmaAllocationCreateInfo vma_msaa_image_alloc_ci{};
         vma_msaa_image_alloc_ci.usage = VMA_MEMORY_USAGE_GPU_ONLY;
         vma_msaa_image_alloc_ci.requiredFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
 
-        VKCHECK(vmaCreateImage(gAllocator, &resolve_image_ci, &vma_msaa_image_alloc_ci, &_msaa_image.handle, &_msaa_image.vma_allocation, NULL));
+        VKCHECK(vmaCreateImage(gAllocator, &msaa_image_ci, &vma_msaa_image_alloc_ci, &_msaa_image.handle, &_msaa_image.vma_allocation, NULL));
 
         VkImageViewCreateInfo resolve_view_ci{};
         resolve_view_ci.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
@@ -2436,18 +2443,9 @@ namespace Renderer {
         VKCHECK(vkCreateImageView(device, &resolve_view_ci, NULL, &_msaa_image_view));
 
 
-
-
-
-
         //
         // Depth image
         //
-
-        if (_depth_image.handle != VK_NULL_HANDLE && old_swapchain != VK_NULL_HANDLE) {
-            vkDestroyImageView(device, _depth_image_view, nullptr);
-            vmaDestroyImage(gAllocator, _depth_image.handle, _depth_image.vma_allocation);
-        }
 
         VkImageCreateInfo depth_image_ci{};
         depth_image_ci.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
@@ -2533,7 +2531,7 @@ namespace Renderer {
     //
     // Graphics Pipeline
     //
-    static void CreateGraphicsPipeline(VkDevice device, VkPipeline* pipeline)
+    void CreateGraphicsPipeline(VkDevice device, VkPipeline* pipeline)
     {
         // [x]write shaders
         // [x]compile to spv
@@ -2710,7 +2708,7 @@ namespace Renderer {
         // Color blend state
         //
         VkPipelineColorBlendAttachmentState color_blend_attachment_state{};
-        color_blend_attachment_state.blendEnable = VK_FALSE;
+        color_blend_attachment_state.blendEnable = VK_TRUE;
         color_blend_attachment_state.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
         color_blend_attachment_state.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
         color_blend_attachment_state.colorBlendOp = VK_BLEND_OP_ADD;
