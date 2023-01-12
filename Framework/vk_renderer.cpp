@@ -1,11 +1,14 @@
 
-
+#include "pch.h"
 #define STB_IMAGE_IMPLEMENTATION
-#include <stb_image.h>
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
-#define _VMA_PUBLIC_INTERFACE
+#define VMA_IMPLEMENTATION
 #define CGLTF_IMPLEMENTATION
+#include <stb_image.h>
+
+#define FRAMEWORK_EXPORTS
 #include "vk_renderer.h"
+
 #include "common.h"
 
 #include <vector>
@@ -22,14 +25,13 @@
 
 // node(ad) this is used for bindless ObjectData & MaterialDataSSBO shader resources
 // which can be indexed for every rendered mesh
-constexpr int MAX_RENDER_ENTITIES = 1024 * 10;
 constexpr int PROMPT_GPU_SELECTION_AT_STARTUP = 0;
 VkSampleCountFlagBits sample_count = VK_SAMPLE_COUNT_8_BIT;
 
 #define SECONDS(value)                  (1000000000 * value)
 #define ARR_COUNT(arr)                  (sizeof(arr) / sizeof(arr[0]))
 
-namespace Renderer {
+namespace FMK {
 
     // this is where resources are cached right now
     std::unordered_map<std::string, void*>    gCgltfData;
@@ -52,15 +54,15 @@ namespace Renderer {
     // VK_PRESENT_MODE_FIFO_KHR; // widest support / VSYNC
     // VK_PRESENT_MODE_IMMEDIATE_KHR; // present as fast as possible, high tearing chance
     // VK_PRESENT_MODE_MAILBOX_KHR; // present as fast as possible, low tearing chance
-    VkPresentModeKHR present_mode = VK_PRESENT_MODE_IMMEDIATE_KHR;
+    VkPresentModeKHR present_mode = VK_PRESENT_MODE_MAILBOX_KHR;
 
     static SDL_Window* gWindow;
     static VkInstance       gInstance;
     static VkSurfaceKHR     gSurface;
     static VkPhysicalDevice gPhysical_device;
     VkDevice         gDevice;
-    static VmaAllocator     gAllocator;
 
+    static VmaAllocator     gAllocator;
 
     struct GPU
     {
@@ -116,7 +118,7 @@ namespace Renderer {
         // VkDescriptorSet UBO_set                 = {};
         uint32_t image_idx = 0;
     };
-    uint32_t               gFrame_in_flight = 0;
+    uint32_t               gFrame_in_flight_idx = 0;
     VkCommandBuffer        gGraphics_cmd_buffer_in_flight;
     std::vector<FrameData> gFrames;
     std::vector<void*>    mapped_view_proj_ptrs;
@@ -145,14 +147,11 @@ namespace Renderer {
     VkSampler                          gDefaultSampler;
     VkSampler                          gDefaultCubeSampler;
 
-    static uint32_t WIDTH = 1180;
-    static uint32_t HEIGHT = 720;
-
 
     //
     // Camera
     //
-    void Camera::CameraCreate(glm::vec3 position, float fov, float aspect, float near, float far)
+    void Camera::CameraCreate(glm::vec3 position, float fov, float aspect, float __near, float __far)
     {
         _forward = { 0, 0, -1 };
         _right = {};
@@ -161,9 +160,9 @@ namespace Renderer {
         _pitch = 0;
         _fov = fov;
         _aspect = 16 / (float)9;
-        _near = near;
-        _far = far;
         _position = position;
+        _near = __near;
+        _far = __far;
 
         _at = _position + _forward;
         _projection = glm::perspective(glm::radians(_fov), _aspect, _near, _far);
@@ -237,12 +236,13 @@ namespace Renderer {
             else
                 SDL_SetRelativeMouseMode(SDL_FALSE);
 
-
+            static float radius = 6;
+            static float camera_height = 1;
 
             static glm::vec3 offset{};
-            offset.x = cosf(glm::radians(_yaw)) * cosf(glm::radians(_pitch)) * 60;
-            offset.y = sinf(glm::radians(_pitch)) * 60 * -1;
-            offset.z = sinf(glm::radians(_yaw)) * cosf(glm::radians(_pitch)) * 60;
+            offset.x = cosf(glm::radians(_yaw)) * cosf(glm::radians(_pitch)) * radius;
+            offset.y = sinf(glm::radians(_pitch)) * radius * -1;
+            offset.z = sinf(glm::radians(_yaw)) * cosf(glm::radians(_pitch)) * radius;
             _forward = (offset);
             _right = (glm::cross(_forward, _up));
 
@@ -250,7 +250,7 @@ namespace Renderer {
             yrelPrev = (float)yrel;
 
             _position = target + offset;
-            _view = glm::lookAt(_position, target + glm::vec3(0, 20, 0), _up);
+            _view = glm::lookAt(_position, target + glm::vec3(0, camera_height, 0), _up);
             //_view = glm::mat4(glm::mat3(_view));
         }
         break;
@@ -355,7 +355,6 @@ namespace Renderer {
         // - gDescriptor_image_infos
         // - gBindless_textures_set
         // - gTexture_descriptor_counter
-
 
 
 
@@ -494,8 +493,8 @@ namespace Renderer {
         assert(result == KTX_SUCCESS);
 
         //format = ktxTexture_GetVkFormat(ktx_texture);
-        this->format = format;
-        //this->format = VK_FORMAT_R8G8B8A8_UNORM;
+        //this->format = format;
+        this->format = VK_FORMAT_R8G8B8A8_UNORM;
         width = ktx_texture->baseWidth;
         height = ktx_texture->baseHeight;
         mip_levels = ktx_texture->numLevels;
@@ -672,11 +671,8 @@ namespace Renderer {
 
 
     //
-    // Mesh
+    // Skaletal Animation handling
     //
-
-
-
 
     float AnimationGetClipDuration(cgltf_animation* animationClip)
     {
@@ -870,11 +866,13 @@ namespace Renderer {
     {
         if (gCgltfData.contains(mesh_filepath)) {
             _mesh_data = (cgltf_data*)gCgltfData[mesh_filepath];
+            SDL_Log("Data is already cached : %s", mesh_filepath);
 
         }
         else {
             cgltf_data* data;
             LoadCgltfData(mesh_filepath, &data);
+            SDL_Log("Loading : %s", mesh_filepath);
 
             gCgltfData.insert({ std::string(mesh_filepath), (void*)data });
             _mesh_data = data;
@@ -889,7 +887,7 @@ namespace Renderer {
         size_t vertex_buffer_size = _mesh_data->buffers->size;
 
         VkBuffer staging_buffer;
-        VmaAllocation staging_buffer_allocation;
+        VmaAllocation staging_buffer_allocation{};
         {
             VkBufferCreateInfo buffer_ci{};
             buffer_ci.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
@@ -1072,7 +1070,7 @@ namespace Renderer {
         }
 
         //fixme cache mesh
-        //gSharedMesh.insert({ "assets/warrior/warrior.gltf", this });
+        //gSharedMesh.insert({ , this });
 
 
         //
@@ -1223,21 +1221,16 @@ namespace Renderer {
 
 
                 // fixme provide SetMaterialData() ?
-                ((MaterialData*)mapped_material_data_ptrs[gFrame_in_flight])[model->_meshes[mesh_idx].instance_id] = model->_meshes[mesh_idx].material_data[submesh_idx];
+                auto instance_id = model->_meshes[mesh_idx].instance_id;
+                ((MaterialData*)mapped_material_data_ptrs[gFrame_in_flight_idx])[instance_id] = model->_meshes[mesh_idx].material_data[submesh_idx];
 
                 vkCmdBindVertexBuffers(gGraphics_cmd_buffer_in_flight, 0, ARR_COUNT(buffers), buffers, offsets);
                 vkCmdBindIndexBuffer(gGraphics_cmd_buffer_in_flight, model->vertex_buffer, model->_meshes[mesh_idx].index_offset[submesh_idx], VK_INDEX_TYPE_UINT16);
-                vkCmdDrawIndexed(gGraphics_cmd_buffer_in_flight, model->_meshes[mesh_idx].index_count[submesh_idx], 1, 0, 0, model->_meshes[mesh_idx].instance_id);
+                vkCmdDrawIndexed(gGraphics_cmd_buffer_in_flight, model->_meshes[mesh_idx].index_count[submesh_idx], 1, 0, 0, instance_id);
 
             }
         }
     }
-
-
-
-    //Shader uses descriptor slot 3.0 (expected `VK_DESCRIPTOR_TYPE_SAMPLER, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER`)
-    //but not declared in pipeline layout The Vulkan spec states : layout must be consistent with all shaders specified in pStages
-
 
 
 
@@ -1253,7 +1246,7 @@ namespace Renderer {
 
     //void DrawIndexed(const VkBuffer* vertex_buffers, uint32_t buffer_count, const VkDeviceSize* vertex_offsets, const VkBuffer index_buffer, uint32_t index_offset, uint32_t index_count, const MaterialData* material_data, uint32_t mesh_id)
     //{
-    //	((MaterialData*)mapped_material_data_ptrs[gFrame_in_flight])[mesh_id] = *material_data;
+    //	((MaterialData*)mapped_material_data_ptrs[gFrame_in_flight_idx])[mesh_id] = *material_data;
     //
     //	vkCmdBindVertexBuffers(gGraphics_cmd_buffer_in_flight, 0, buffer_count, vertex_buffers, vertex_offsets);
     //	vkCmdBindIndexBuffer(gGraphics_cmd_buffer_in_flight, index_buffer, index_offset, VK_INDEX_TYPE_UINT16);
@@ -1267,22 +1260,16 @@ namespace Renderer {
 
     void BeginRendering()
     {
-
-        // gActive_camera->CameraUpdate(&input, dt, {0, 0, 40});
-        // gActive_camera->_aspect = WIDTH / (float)HEIGHT;
-
-
         VkResult result;
 
-        gGraphics_cmd_buffer_in_flight = gFrames[gFrame_in_flight].graphics_command_buffer;
+        auto frame_in_flight = &gFrames[gFrame_in_flight_idx];
+        gGraphics_cmd_buffer_in_flight = frame_in_flight->graphics_command_buffer;
 
-        {
-            VKCHECK(vkWaitForFences(gDevice, 1, &gFrames[gFrame_in_flight].render_fence, VK_TRUE, SECONDS(1)));
-            VKCHECK(vkResetFences(gDevice, 1, &gFrames[gFrame_in_flight].render_fence));
-            VKCHECK(result = vkAcquireNextImageKHR(gDevice, gSwapchain._handle, SECONDS(1), 0, gFrames[gFrame_in_flight].render_fence, &gFrames[gFrame_in_flight].image_idx));
-            if (result == VK_ERROR_OUT_OF_DATE_KHR) {
-                gSwapchain.Create(gDevice, gPhysical_device, gSurface, gSwapchain._handle);
-            }
+        VKCHECK(vkWaitForFences(gDevice, 1, &frame_in_flight->render_fence, VK_TRUE, SECONDS(1)));
+        VKCHECK(vkResetFences(gDevice, 1, &frame_in_flight->render_fence));
+        VKCHECK(result = vkAcquireNextImageKHR(gDevice, gSwapchain._handle, SECONDS(1), 0, frame_in_flight->render_fence, &frame_in_flight->image_idx));
+        if (result == VK_ERROR_OUT_OF_DATE_KHR) {
+            gSwapchain.Create(gDevice, gPhysical_device, gSurface, gSwapchain._handle);
         }
 
         VKCHECK(vkResetCommandBuffer(gGraphics_cmd_buffer_in_flight, 0));
@@ -1304,7 +1291,7 @@ namespace Renderer {
         subresource_range.levelCount = 1;
         subresource_range.layerCount = 1;
 
-        TransitionImageLayout(gGraphics_cmd_buffer_in_flight, gSwapchain._images[gFrames[gFrame_in_flight].image_idx],
+        TransitionImageLayout(gGraphics_cmd_buffer_in_flight, gSwapchain._images[frame_in_flight->image_idx],
             VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL, subresource_range, false);
 
         TransitionImageLayout(gGraphics_cmd_buffer_in_flight, gSwapchain._msaa_image.handle,
@@ -1324,7 +1311,7 @@ namespace Renderer {
         color_attachment_info[0].clearValue = clear_values[0];
 
         color_attachment_info[0].resolveImageLayout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL_KHR;
-        color_attachment_info[0].resolveImageView = gSwapchain._image_views[gFrames[gFrame_in_flight].image_idx];
+        color_attachment_info[0].resolveImageView = gSwapchain._image_views[frame_in_flight->image_idx];
         color_attachment_info[0].resolveMode = VK_RESOLVE_MODE_AVERAGE_BIT;
 
         /*color_attachment_info[1].sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
@@ -1365,12 +1352,12 @@ namespace Renderer {
 
         vkCmdBindPipeline(gGraphics_cmd_buffer_in_flight, VK_PIPELINE_BIND_POINT_GRAPHICS, gDefault_graphics_pipeline);
 
-        vkCmdBindDescriptorSets(gGraphics_cmd_buffer_in_flight, VK_PIPELINE_BIND_POINT_GRAPHICS, gDefault_graphics_pipeline_layout, 0, 1, &gView_projection_sets[gFrame_in_flight], 0, NULL);
-        vkCmdBindDescriptorSets(gGraphics_cmd_buffer_in_flight, VK_PIPELINE_BIND_POINT_GRAPHICS, gDefault_graphics_pipeline_layout, 1, 1, &gDraw_data_sets[gFrame_in_flight], 0, NULL);
-        vkCmdBindDescriptorSets(gGraphics_cmd_buffer_in_flight, VK_PIPELINE_BIND_POINT_GRAPHICS, gDefault_graphics_pipeline_layout, 2, 1, &gMaterial_data_sets[gFrame_in_flight], 0, NULL);
+        vkCmdBindDescriptorSets(gGraphics_cmd_buffer_in_flight, VK_PIPELINE_BIND_POINT_GRAPHICS, gDefault_graphics_pipeline_layout, 0, 1, &gView_projection_sets[gFrame_in_flight_idx], 0, NULL);
+        vkCmdBindDescriptorSets(gGraphics_cmd_buffer_in_flight, VK_PIPELINE_BIND_POINT_GRAPHICS, gDefault_graphics_pipeline_layout, 1, 1, &gDraw_data_sets[gFrame_in_flight_idx], 0, NULL);
+        vkCmdBindDescriptorSets(gGraphics_cmd_buffer_in_flight, VK_PIPELINE_BIND_POINT_GRAPHICS, gDefault_graphics_pipeline_layout, 2, 1, &gMaterial_data_sets[gFrame_in_flight_idx], 0, NULL);
         vkCmdBindDescriptorSets(gGraphics_cmd_buffer_in_flight, VK_PIPELINE_BIND_POINT_GRAPHICS, gDefault_graphics_pipeline_layout, 3, 1, &gBindless_textures_set, 0, NULL);
 
-        auto global_uniforms = ((GlobalUniforms*)mapped_view_proj_ptrs[gFrame_in_flight]);
+        auto global_uniforms = ((GlobalUniforms*)mapped_view_proj_ptrs[gFrame_in_flight_idx]);
         global_uniforms->projection = gActive_camera->_projection;
         global_uniforms->view = gActive_camera->_view;
         global_uniforms->projection[1][1] *= -1;
@@ -1405,7 +1392,7 @@ namespace Renderer {
         subresource_range.levelCount = 1;
         subresource_range.layerCount = 1;
 
-        TransitionImageLayout(gGraphics_cmd_buffer_in_flight, gSwapchain._images[gFrames[gFrame_in_flight].image_idx], VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, subresource_range, false);
+        TransitionImageLayout(gGraphics_cmd_buffer_in_flight, gSwapchain._images[gFrames[gFrame_in_flight_idx].image_idx], VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, subresource_range, false);
         TransitionImageLayout(gGraphics_cmd_buffer_in_flight, gSwapchain._msaa_image.handle, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, subresource_range, false);
 
         VKCHECK(vkEndCommandBuffer(gGraphics_cmd_buffer_in_flight));
@@ -1424,14 +1411,14 @@ namespace Renderer {
 
             VkSemaphoreSubmitInfo wait_semephore_info = {};
             wait_semephore_info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO;
-            wait_semephore_info.semaphore = gFrames[gFrame_in_flight].present_semaphore;
+            wait_semephore_info.semaphore = gFrames[gFrame_in_flight_idx].present_semaphore;
             wait_semephore_info.value;
             wait_semephore_info.stageMask = VK_PIPELINE_STAGE_NONE;
             wait_semephore_info.deviceIndex;
 
             VkSemaphoreSubmitInfo signal_semephore_info = {};
             signal_semephore_info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO;
-            signal_semephore_info.semaphore = gFrames[gFrame_in_flight].render_semaphore;
+            signal_semephore_info.semaphore = gFrames[gFrame_in_flight_idx].render_semaphore;
             signal_semephore_info.value;
             signal_semephore_info.stageMask = VK_PIPELINE_STAGE_NONE;
             signal_semephore_info.deviceIndex;
@@ -1446,10 +1433,10 @@ namespace Renderer {
             submit_info.signalSemaphoreInfoCount = 1;
             submit_info.pSignalSemaphoreInfos = &signal_semephore_info;
 
-            VKCHECK(vkWaitForFences(gDevice, 1, &gFrames[gFrame_in_flight].render_fence, VK_TRUE, SECONDS(1)));
-            VKCHECK(vkResetFences(gDevice, 1, &gFrames[gFrame_in_flight].render_fence));
+            VKCHECK(vkWaitForFences(gDevice, 1, &gFrames[gFrame_in_flight_idx].render_fence, VK_TRUE, SECONDS(1)));
+            VKCHECK(vkResetFences(gDevice, 1, &gFrames[gFrame_in_flight_idx].render_fence));
 
-            VKCHECK(vkQueueSubmit2(gQueues._graphics, 1, &submit_info, gFrames[gFrame_in_flight].render_fence));
+            VKCHECK(vkQueueSubmit2(gQueues._graphics, 1, &submit_info, gFrames[gFrame_in_flight_idx].render_fence));
         }
 
 
@@ -1460,10 +1447,10 @@ namespace Renderer {
             VkPresentInfoKHR present_info = {};
             present_info.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
             present_info.waitSemaphoreCount = 1;
-            present_info.pWaitSemaphores = &gFrames[gFrame_in_flight].render_semaphore; // the semaphore to wait upon before presenting
+            present_info.pWaitSemaphores = &gFrames[gFrame_in_flight_idx].render_semaphore; // the semaphore to wait upon before presenting
             present_info.swapchainCount = 1;
             present_info.pSwapchains = &gSwapchain._handle;
-            present_info.pImageIndices = &gFrames[gFrame_in_flight].image_idx;
+            present_info.pImageIndices = &gFrames[gFrame_in_flight_idx].image_idx;
             present_info.pResults;
 
             VkResult result;
@@ -1473,12 +1460,12 @@ namespace Renderer {
             }
         }
 
-        ++gFrame_in_flight;
-        gFrame_in_flight = gFrame_in_flight % gSwapchain._image_count;
+        ++gFrame_in_flight_idx;
+        gFrame_in_flight_idx = gFrame_in_flight_idx % gSwapchain._image_count;
     }
 
 
-    bool InitRenderer()
+    FMK_API bool InitVulkanRenderer()
     {
         SDL_Init(SDL_INIT_EVERYTHING);
         auto w_flags = (SDL_WINDOW_VULKAN | SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE);
@@ -1527,6 +1514,7 @@ namespace Renderer {
             application_info.apiVersion = VK_API_VERSION_1_3;
 
             VkInstanceCreateInfo create_info_instance = {};
+
 #if _DEBUG
             VkValidationFeatureEnableEXT enabled_validation_feature[] = {
                 VK_VALIDATION_FEATURE_ENABLE_DEBUG_PRINTF_EXT,
@@ -1667,7 +1655,7 @@ namespace Renderer {
             vkGetPhysicalDeviceFeatures(gGpu._physical_device, &gGpu._features);
 
             gGpu._features2 = physical_device_features2.features;
-            }
+        }
 
 
 
@@ -1766,7 +1754,7 @@ namespace Renderer {
             for (size_t i = 0; i < device_properties_count; i++) {
                 if (strcmp(device_extension_properties[i].extensionName, VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME) == 0)
                     SDL_Log("%d: %s\n", device_extension_properties[i].specVersion, device_extension_properties[i].extensionName);
-        }
+            }
 #endif
 
             const float queue_priorities[] = {
@@ -2096,26 +2084,23 @@ namespace Renderer {
             for (size_t i = 0; i < gSwapchain._image_count; i++) {
 
                 {
-                    CreateBuffer(&gFrames[i].view_proj_uniforms, sizeof(GlobalUniforms),
+                    VKCHECK(CreateBuffer(&gFrames[i].view_proj_uniforms, sizeof(GlobalUniforms),
                         VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
                         VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT,
-                        VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE);
+                        VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE));
+                    VKCHECK(vmaMapMemory(gAllocator, gFrames[i].view_proj_uniforms.vma_allocation, &mapped_view_proj_ptrs[i]));
 
-                    vmaMapMemory(gAllocator, gFrames[i].view_proj_uniforms.vma_allocation, &mapped_view_proj_ptrs[i]);
-
-                    CreateBuffer(&gFrames[i].draw_data_ssbo, sizeof(ObjectData) * MAX_RENDER_ENTITIES,
+                    VKCHECK(CreateBuffer(&gFrames[i].draw_data_ssbo, sizeof(ObjectData) * MAX_RENDER_ENTITIES,
                         VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
                         VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT,
-                        VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE);
+                        VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE));
+                    VKCHECK(vmaMapMemory(gAllocator, gFrames[i].draw_data_ssbo.vma_allocation, &mapped_object_data_ptrs[i]));
 
-                    vmaMapMemory(gAllocator, gFrames[i].draw_data_ssbo.vma_allocation, &mapped_object_data_ptrs[i]);
-
-                    CreateBuffer(&gFrames[i].material_data_ssbo, sizeof(MaterialData) * MAX_RENDER_ENTITIES,
+                    VKCHECK(CreateBuffer(&gFrames[i].material_data_ssbo, sizeof(MaterialData) * MAX_RENDER_ENTITIES,
                         VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
                         VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT,
-                        VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE);
-
-                    vmaMapMemory(gAllocator, gFrames[i].material_data_ssbo.vma_allocation, &mapped_material_data_ptrs[i]);
+                        VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE));
+                    VKCHECK(vmaMapMemory(gAllocator, gFrames[i].material_data_ssbo.vma_allocation, &mapped_material_data_ptrs[i]));
                 }
 
                 {
@@ -2216,7 +2201,7 @@ namespace Renderer {
                 VkSamplerCreateInfo ci_sampler = {};
                 ci_sampler.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
                 ci_sampler.minFilter = VK_FILTER_LINEAR;
-                ci_sampler.magFilter = VK_FILTER_NEAREST;
+                ci_sampler.magFilter = VK_FILTER_LINEAR;
                 ci_sampler.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
                 ci_sampler.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
                 ci_sampler.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
@@ -2539,8 +2524,8 @@ namespace Renderer {
         // [x]create modules
         // [x]build pipeline
 
-        VkShaderModule vertex_shader_module;
-        VkShaderModule fragment_shader_module;
+        VkShaderModule vertex_shader_module{};
+        VkShaderModule fragment_shader_module{};
         CreateShaderModule(device, "shaders/standard.vert.spv", &vertex_shader_module);
         CreateShaderModule(device, "shaders/standard.frag.spv", &fragment_shader_module);
 
@@ -2816,7 +2801,7 @@ namespace Renderer {
     // Allocates one primary command buffer from global graphics command pool
     // assumed to handle transfer operations
 
-    static VkCommandBuffer BeginCommandBuffer()
+    VkCommandBuffer BeginCommandBuffer()
     {
         VkCommandBufferBeginInfo cmd_buffer_begin_info = {};
         cmd_buffer_begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -2828,7 +2813,7 @@ namespace Renderer {
         return command_buffer;
     }
 
-    static void FlushCommandBuffer(const VkCommandBuffer* command_buffer)
+    void FlushCommandBuffer(const VkCommandBuffer* command_buffer)
     {
         VKCHECK(vkEndCommandBuffer(*command_buffer));
         VkSubmitInfo submit_info{};
@@ -2839,7 +2824,7 @@ namespace Renderer {
         vkDeviceWaitIdle(gDevice);
     }
 
-    static VkResult CreateBuffer(Buffer* buffer, VkDeviceSize size, VkBufferUsageFlags buffer_usage, VmaAllocationCreateFlags allocation_flags, VmaMemoryUsage memory_usage)
+    VkResult CreateBuffer(Buffer* buffer, VkDeviceSize size, VkBufferUsageFlags buffer_usage, VmaAllocationCreateFlags allocation_flags, VmaMemoryUsage memory_usage)
     {
         VkBufferCreateInfo buffer_ci{};
         buffer_ci.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
@@ -2854,7 +2839,7 @@ namespace Renderer {
         return vmaCreateBuffer(gAllocator, &buffer_ci, &vma_allocation_ci, &buffer->handle, &buffer->vma_allocation, NULL);
     }
 
-    static void TransitionImageLayout(VkCommandBuffer command_buffer, VkImage image, VkImageLayout old_layout, VkImageLayout new_layout, VkImageSubresourceRange subresource_range, bool is_depth)
+    void TransitionImageLayout(VkCommandBuffer command_buffer, VkImage image, VkImageLayout old_layout, VkImageLayout new_layout, VkImageSubresourceRange subresource_range, bool is_depth)
     {
         VkImageMemoryBarrier2 barrier = {};
         barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
@@ -2951,10 +2936,16 @@ namespace Renderer {
 
     void SetObjectData(ObjectData* object_data, uint32_t object_idx)
     {
-        for (size_t i = 0; i < 128; i++) {
-            ((ObjectData*)mapped_object_data_ptrs[gFrame_in_flight])[object_idx].joint_matrices[i] = object_data->joint_matrices[i];
-        }
-        ((ObjectData*)mapped_object_data_ptrs[gFrame_in_flight])[object_idx].model_matrix = object_data->model_matrix;
+        //for (size_t i = 0; i < 128; i++) {
+        //    ((ObjectData*)mapped_object_data_ptrs[gFrame_in_flight_idx])[object_idx].joint_matrices[i] = object_data->joint_matrices[i];
+        //}
+
+        memcpy(
+            ((ObjectData*)mapped_object_data_ptrs[gFrame_in_flight_idx])[object_idx].joint_matrices,
+            object_data->joint_matrices,
+            sizeof(glm::mat4) * MAX_JOINTS);
+
+        ((ObjectData*)mapped_object_data_ptrs[gFrame_in_flight_idx])[object_idx].model_matrix = object_data->model_matrix;
     }
 
     void SetWindowSize(int width, int height)

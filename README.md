@@ -3,11 +3,11 @@
 ## Preview
 ![](https://github.com/AdlanSADOU/3D-Renderer/blob/main/.misc/preview.gif)
 
-Starting from August 2022, after obtaining my bachelor in IT I decided to take a year off to implement a 3D game from scratch(almost). 
+Starting from August 2022, after obtaining my bachelor in IT I decided to take a year off to implement a 3D game from scratch(or almost). 
 The main goal is to get as much as possible hands on experience on some aspects and systems that are part of 3D game technologies.
 
 ## Current Features
-- [x] Mesh Rendering
+- [x] Rendering
 - [x] Skinned Animation
 - [x] Lighting
 - [x] Materials

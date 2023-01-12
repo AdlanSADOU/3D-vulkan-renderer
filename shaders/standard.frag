@@ -48,6 +48,7 @@ void main()
     // If it's a skybox, just sample it and return
     if (vsIsSkybox == int(1)) {
         outFrag_Color = texture(samplerCubeMap, vsSkyboxUVW);
+        // outFrag_Color = vec4(0.6,0.1,0.4, 1.0);
         return;
     }
 

@@ -10,3 +10,9 @@
 - font rendering /freetype
 - Frustum culling?
 - Occlusion culling?
+
+-- thoughts
+
+> Editor
+must be launched from platform layer so that we can easily switch between game/editor
+game must reflect changes made from editor as they happen

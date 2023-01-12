@@ -6,10 +6,28 @@
 #include <vulkan/vulkan.h>
 #include <vma/vk_mem_alloc.h>
 #include <cgltf.h>
-#include <vector>
 #include <SDL2/SDL.h>
+#include <vector>
 
-namespace Renderer {
+#ifdef FRAMEWORK_EXPORTS
+#define FMK_API __declspec(dllexport)
+#else
+#define FMK_API __declspec(dllimport)
+#endif
+
+
+namespace FMK {
+    typedef unsigned char i8;
+
+
+    const auto CULL_MODE_FRONT = VK_CULL_MODE_FRONT_BIT;
+    const auto CULL_MODE_BACK = VK_CULL_MODE_BACK_BIT;
+    const i8 MAX_JOINTS = 128u;
+    const int MAX_RENDER_ENTITIES = 1024*10;
+
+    FMK_API uint32_t WIDTH;
+    FMK_API uint32_t HEIGHT;
+
 
     struct GlobalUniforms
     {
@@ -21,7 +39,7 @@ namespace Renderer {
     struct ObjectData
     {
         glm::mat4 model_matrix;
-        glm::mat4 joint_matrices[128];
+        glm::mat4 joint_matrices[MAX_JOINTS];
     };
 
     struct PushConstants
@@ -87,8 +105,8 @@ namespace Renderer {
         float     _speed = 60.f;
         float     _sensitivity = .046f;
 
-        void CameraCreate(glm::vec3 position, float fov, float aspect, float near, float far);
-        void CameraUpdate(Input* input, float dt, glm::vec3 target);
+        FMK_API void CameraCreate(glm::vec3 position, float fov, float aspect, float near, float far);
+        FMK_API void CameraUpdate(Input* input, float dt, glm::vec3 target);
     };
 
     struct Texture
@@ -109,9 +127,9 @@ namespace Renderer {
         // see gDescriptor_image_infos & gBindless_textures_set
         uint32_t descriptor_array_idx;
 
-        void Create(const char* filepath);
-        void CreateCubemapKTX(const char* filepath, VkFormat format);
-        void Destroy();
+        FMK_API void Create(const char* filepath);
+        FMK_API void CreateCubemapKTX(const char* filepath, VkFormat format);
+        FMK_API void Destroy();
     };
 
     struct Transform
@@ -124,7 +142,7 @@ namespace Renderer {
         glm::vec3   translation = {};
 
 
-        glm::mat4 GetLocalMatrix()
+        FMK_API glm::mat4 GetLocalMatrix()
         {
             return glm::translate(glm::mat4(1), translation)
                 * glm::toMat4(rotation)
@@ -136,7 +154,6 @@ namespace Renderer {
     //
     // Animation
     //
-    const int MAX_JOINTS = 128;
     struct TranslationChannel
     {
         float* timestamps;
@@ -177,7 +194,7 @@ namespace Renderer {
 
     struct Animation
     {
-        void* handle = {};
+        void* handle = {}; // cgltf_animation
         const char* name = {};
         float       duration = {};
         float       globalTimer = {};
@@ -208,6 +225,10 @@ namespace Renderer {
 
     struct Mesh
     {
+        // todo: 
+        // tying skeletol info to Mesh is probably a bad idea
+        // but we'll think about this when we actually get to the
+        // part we need to share skeletons and animations
         std::vector<Joint> _joints;
         // std::vector<AnimationV2> _animations_v2;
         std::vector<Animation> _animations;
@@ -215,19 +236,25 @@ namespace Renderer {
         bool _should_play_animation = true;
 
 
-        // todo: we must eventually cache this data to avoid
-        // creating GPU buffers for the same Mesh multiple times
-        VkBuffer      vertex_buffer;
-        VmaAllocation vertex_buffer_allocation;
-        cgltf_data* _mesh_data; // fixme: dont need to store this member. removing it would allow us to remove cgltf from the public interface
+        // todo: 
+        // Mesh should not contain actual buffer/memory handles 
+        // we must eventually cache this data to avoid
+        // creating GPU backed buffers for the same Mesh multiple times
+        // we must assign unique ids for every unique mesh that is loaded from disk
+        VkBuffer      vertex_buffer = {};
+        VmaAllocation vertex_buffer_allocation = {};
 
-        struct SkinnedMesh
+        // fixme: dont need to store this member. 
+        // removing it would allow us to remove cgltf from the public interface
+        cgltf_data* _mesh_data = {}; 
+
+        struct SkinnedSubMesh
         {
             // this id is passed as 'baseInstance' for every drawn mesh 
             // through vkCmdDrawIndexed(..., firstInstance)
             // which can be retrieved with gl_BaseInstance in the vertex shader
             // it is a way to identify a submesh within a Mesh so that we can retieve its material data
-            uint32_t instance_id;
+            uint32_t instance_id = {};
 
             std::vector<MaterialData> material_data{};
 
@@ -242,32 +269,33 @@ namespace Renderer {
             std::vector<VkDeviceSize> index_offset;
             std::vector<uint32_t>     index_count;
         };
-        std::vector<SkinnedMesh> _meshes;
+        std::vector<SkinnedSubMesh> _meshes;
 
-        void Create(const char* path);
+        FMK_API void Create(const char* path);
     };
 
-    extern VkPipeline       gDefault_graphics_pipeline;
-    extern VkDevice         gDevice;
+    // exposed for the platform layer to be able to 
+    // reload shaders on the fly
+    FMK_API extern VkPipeline       gDefault_graphics_pipeline;
+    FMK_API extern VkDevice         gDevice;
 
     // experimental
-    void CreateGraphicsPipeline(VkDevice device, VkPipeline* pipeline);
+    FMK_API void CreateGraphicsPipeline(VkDevice device, VkPipeline* pipeline);
 
-    bool InitRenderer();
-    void SetWindowSize(int width, int height);
+    FMK_API bool InitVulkanRenderer();
 
-    void BeginRendering();
-    void EndRendering();
-    void EnableDepthTest(bool enabled);
-    void EnableDepthWrite(bool enabled);
-    void SetCullMode(VkCullModeFlags cullmode);
+    FMK_API void BeginRendering();
+    FMK_API void EndRendering();
+    FMK_API void EnableDepthTest(bool enabled);
+    FMK_API void EnableDepthWrite(bool enabled);
+    FMK_API void SetCullMode(VkCullModeFlags cullmode);
 
-    void AnimationUpdate(Animation* anim, float dt);
-    SDL_Window* GetSDLWindowHandle();
-    void SetActiveCamera(Camera* camera);
-    void SetObjectData(ObjectData* object_data, uint32_t object_idx);
-    void SetWindowDimensions(int width, int height);
-    void SetPushConstants(PushConstants* constants);
-    void Draw(const Mesh* model);
+    FMK_API void AnimationUpdate(Animation* anim, float dt);
+    FMK_API SDL_Window* GetSDLWindowHandle();
+    FMK_API void SetWindowSize(int width, int height);
+    FMK_API void SetActiveCamera(Camera* camera);
+    FMK_API void SetObjectData(ObjectData* object_data, uint32_t object_idx);
+    FMK_API void SetPushConstants(PushConstants* constants);
+    FMK_API void Draw(const Mesh* model);
 
 }
