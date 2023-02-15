@@ -1,5 +1,5 @@
 #include "pch.h"
-#include "vk_renderer.h"
+#include "VKRenderer.h"
 
 
 
@@ -16,8 +16,6 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD  ul_reason_for_call, LPVOID lpReser
 struct Entity
 {
     FMK::Mesh          mesh;
-    FMK::ObjectData    object_data;
-    FMK::PushConstants push_constants;
     FMK::Transform     transform;
 
     // for per object things like model matrix & joint matrices.
@@ -58,7 +56,7 @@ extern "C" dllExport void GameInit()
     skybox.object_idx = ENTITY_COUNT;
     skybox.transform.translation = { 0, -.22, 0 };
     skybox.transform.scale = glm::vec3(1.);
-    skybox.push_constants.is_skybox = 1;
+    skybox.mesh.push_constants.is_skybox = 1;
     //skybox.mesh._meshes[0].material_data[0].base_color_texture_idx = skybox_texture.descriptor_array_idx;
 
     warrior.Create("assets/warrior2/warrior.gltf");
@@ -123,9 +121,11 @@ extern "C" dllExport void GameInit()
 
 extern "C" dllExport void GameUpdateAndRender(float dt, FMK::Input * input)
 {
+    int width=0, height=0;
+    FMK::GetWindowSize(&width, &height);
     camera.CameraUpdate(input, dt, entities[0].transform.translation);
     camera._forward.y = 0;
-    camera._aspect = FMK::WIDTH / (float)FMK::HEIGHT;
+    camera._aspect = width / (float)height;
     SetActiveCamera(&camera);
 
     glm::vec3 direction{ 0, 0, 0 };
@@ -169,10 +169,10 @@ extern "C" dllExport void GameUpdateAndRender(float dt, FMK::Input * input)
     glm::mat4 skybox_model_matrix = glm::mat4(1);
     skybox_model_matrix = glm::translate(skybox_model_matrix, skybox.transform.translation) * glm::scale(skybox_model_matrix, glm::vec3(skybox.transform.scale));
 
-    skybox.object_data.model_matrix = skybox_model_matrix;
-    skybox.push_constants.object_idx = skybox.object_idx;
-    FMK::SetPushConstants(&skybox.push_constants);
-    FMK::SetObjectData(&skybox.object_data, skybox.object_idx);
+    skybox.mesh.object_data.model_matrix = skybox_model_matrix;
+    skybox.mesh.push_constants.object_idx = skybox.object_idx;
+    FMK::SetPushConstants(&skybox.mesh.push_constants);
+    FMK::SetObjectData(&skybox.mesh.object_data, skybox.object_idx);
     FMK::Draw(&skybox.mesh);
 
     FMK::EnableDepthWrite(true);
@@ -186,28 +186,27 @@ extern "C" dllExport void GameUpdateAndRender(float dt, FMK::Input * input)
             * glm::mat4_cast(entities[i].transform.rotation)
             * glm::scale(model_matrix, glm::vec3(entities[i].transform.scale));
 
-        entities[i].object_data.model_matrix = model_matrix;
+        entities[i].mesh.object_data.model_matrix = model_matrix;
 
-        FMK::PushConstants push_constants;
-        push_constants.object_idx = entities[i].object_idx;
+        //FMK::PushConstants push_constants;
+        entities[i].mesh.push_constants.object_idx = entities[i].object_idx;
 
         // handle animation, if any
         auto current_animation = entities[i].mesh._current_animation;
         if (current_animation) {
             AnimationUpdate(current_animation, dt);
 
-            push_constants.has_joints = 1;
+            entities[i].mesh.push_constants.has_joints = 1;
 
             memcpy(
-                entities[i].object_data.joint_matrices,
+                entities[i].mesh.object_data.joint_matrices,
                 current_animation->joint_matrices,
-                sizeof(glm::mat4) * FMK::MAX_JOINTS);
+                sizeof(glm::mat4) * 128);
         }
 
-        FMK::SetPushConstants(&push_constants);
-        FMK::SetObjectData(&entities[i].object_data, entities[i].object_idx);
+        FMK::SetPushConstants(&entities[i].mesh.push_constants);
+        FMK::SetObjectData(&entities[i].mesh.object_data, entities[i].object_idx);
         FMK::Draw(&entities[i].mesh);
     }
-
     FMK::EndRendering();
 }

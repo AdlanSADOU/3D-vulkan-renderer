@@ -105,11 +105,21 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="common.h" />
+    <ClInclude Include="VKBuffer.h" />
+    <ClInclude Include="VKImage.h" />
+    <ClInclude Include="VKDeviceContext.h" />
+    <ClInclude Include="VKTexture.h" />
     <ClInclude Include="vk_mem_alloc.h" />
-    <ClInclude Include="vk_renderer.h" />
+    <ClInclude Include="VKRenderer.h" />
+    <ClInclude Include="VKDevice.h" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="vk_renderer.cpp" />
+    <ClCompile Include="VKBuffer.cpp" />
+    <ClCompile Include="VKImage.cpp" />
+    <ClCompile Include="VKDeviceContext.cpp" />
+    <ClCompile Include="VKRenderer.cpp" />
+    <ClCompile Include="VKDevice.cpp" />
+    <ClCompile Include="VKTexture.cpp" />
   </ItemGroup>
   <ItemGroup>
     <None Include="cpp.hint" />

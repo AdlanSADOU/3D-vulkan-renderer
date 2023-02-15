@@ -1,62 +1,78 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include <vector>
-#include <SDL2/SDL.h>
-#include "vk_renderer.h"
+#include <SDL.h>
+#include "VKRenderer.h"
+
+
+
+
+
+#define GAME_INIT(name) void name(void)
+typedef GAME_INIT(GameInit_t);
+
+GAME_INIT(GameInit_stub) {
+    // stub function that does nothing
+    // to avoid crashing in case the DLL does not load properly
+}
+
+#define GAME_UPDATE_AND_RENDER(name) void name(float dt, FMK::Input *input)
+typedef GAME_UPDATE_AND_RENDER(GameUpdateAndRender_t);
+
+GAME_UPDATE_AND_RENDER(GameUpdateAndRender_stub) {
+    // stub function that does nothing
+    // to avoid crashing in case the DLL does not load properly
+}
+
+
+struct GameDll
+{
+    HMODULE handle;
+    GameInit_t* GameInit;
+    GameUpdateAndRender_t* GameUpdateAndRender;
+};
+
+void LoadGameDll(GameDll* dll)
+{
+    dll->GameInit = GameInit_stub;
+
+    if (!(dll->handle = LoadLibraryA("Game.dll")))
+    {
+        SDL_Log(" 'LoadLibraryA' failed with code: %d\n", GetLastError());
+    }
+
+    dll->GameInit = (GameInit_t*)GetProcAddress(dll->handle, "GameInit");
+    dll->GameUpdateAndRender = (GameUpdateAndRender_t*)GetProcAddress(dll->handle, "GameUpdateAndRender");
+
+    if (!dll->GameInit) {
+        SDL_Log(" 'GetProcAddress' failed with code: %d\n", GetLastError());
+        dll->GameInit = GameInit_stub;
+    }
+
+    if (!dll->GameUpdateAndRender) {
+        SDL_Log(" 'GetProcAddress' failed with code: %d\n", GetLastError());
+        dll->GameUpdateAndRender = GameUpdateAndRender_stub;
+    }
+}
+
+
+
 
 
 int width = 1180;
 int height = 720;
 
-#define GAME_INIT(name) void name(void)
-typedef GAME_INIT(GameInit_t);
-GAME_INIT(game_init_stub) {}
-
-#define GAME_UPDATE_AND_RENDER(name) void name(float dt, FMK::Input *input)
-typedef GAME_UPDATE_AND_RENDER(GameUpdateAndRender_t);
-GAME_UPDATE_AND_RENDER(game_update_and_render_stub) {}
-
 FMK::Input input;
-
-struct GameDll
-{
-    HMODULE handle;
-    GameInit_t* game_init;
-    GameUpdateAndRender_t* game_update_and_render;
-};
-
-void LoadGameDll(GameDll* dll)
-{
-    dll->game_init = game_init_stub;
-
-    dll->handle = LoadLibraryA("Game.dll");
-    if (dll->handle)
-    {
-        dll->game_init = (GameInit_t*)GetProcAddress(dll->handle, "GameInit");
-        dll->game_update_and_render = (GameUpdateAndRender_t*)GetProcAddress(dll->handle , "GameUpdateAndRender");
-
-        if (!dll->game_init) {
-            SDL_Log(" 'GetProcAddress': %d\n", GetLastError());
-            dll->game_init = game_init_stub;
-        }
-
-        if (!dll->game_update_and_render) {
-            SDL_Log(" 'GetProcAddress': %d\n", GetLastError());
-            dll->game_update_and_render = game_update_and_render_stub;
-        }
-    }
-}
 
 extern int main(int argc, char** argv)
 {
+    FMK::InitRenderer(width, height);
+
     GameDll game_dll;
     LoadGameDll(&game_dll);
-    
-    FMK::SetWindowSize(width, height);
-    FMK::InitVulkanRenderer();
+    game_dll.GameInit();
 
 
-    game_dll.game_init();
 
     bool bQuit = false;
     bool window_minimized = false;
@@ -65,7 +81,6 @@ extern int main(int argc, char** argv)
     uint64_t lastCounter = SDL_GetPerformanceCounter();
     uint64_t perfFrequency = SDL_GetPerformanceFrequency();
     float    dt = 0;
-
 
     //
     // Main loop
@@ -125,12 +140,14 @@ extern int main(int argc, char** argv)
                 case SDL_QUIT:
                     bQuit = true;
 
-                    // this case that embeds another switch is placed at the bottom of the outer switch
+                    // this case embedding another switch is placed at the bottom of the outer switch
                     // because for some reason the case that follows this one is always triggered on first few runs
                 case SDL_WINDOWEVENT:
                     switch (e.window.event) {
                     case SDL_WINDOWEVENT_RESIZED:
                         SDL_GetWindowSize(FMK::GetSDLWindowHandle(), &width, &height);
+                        //FMK::SetWindowSize(width, height);
+
                         break;
                     case SDL_WINDOWEVENT_MINIMIZED:
                         window_minimized = true;
@@ -155,15 +172,14 @@ extern int main(int argc, char** argv)
 
 
         if (input.E) {
-            FMK::CreateGraphicsPipeline(FMK::gDevice, &FMK::gDefault_graphics_pipeline);
+            FMK::RebuildGraphicsPipeline();
         }
 
 
 
-        game_dll.game_update_and_render(dt, &input);
+        game_dll.GameUpdateAndRender(dt, &input);
 
 
-        //SDL_Log("camp: (%f, %f, %f)\n", camera._position.x, camera._position.y, camera._position.z);
 
 
 
@@ -178,7 +194,7 @@ extern int main(int argc, char** argv)
         lastCounter = endCounter;
         lastCycleCount = endCycleCount;
 
-
+#if 0
         static float acc = 0;
         if ((acc += dt) > 1) {
             static char buffer[256];
@@ -192,6 +208,7 @@ extern int main(int argc, char** argv)
             SDL_Log("%s", buffer);
             acc = 0;
         }
+#endif
 
     }
 
