@@ -1,20 +1,20 @@
+/*
+    This is intented as a single header 3D math library for personal use.
+    This is the first iteration and is by no means meant to be performant.
+    Eventually SIMD operations will be used where possible.
+*/
+
 /*TODO
     Vector4
     Matrix * Vector operator
+    Quaternion & operations
     Ortho projection
 */
 
 #define PI 3.14159265358979323846264338327950288
+static const float toRadians = PI / 180;
+static const float toDegrees = 180 / PI;
 
-static float Radians(float degrees)
-{
-    return degrees * PI / 180;
-}
-
-static float Degrees(float radians)
-{
-    return radians * 180 / PI;
-}
 
 union Vector2 {
     struct
@@ -286,7 +286,7 @@ static Matrix4 RotateZ(float radians)
 
 static Matrix4 Perspective(float zNear, float zFar, float fovy, float aspect)
 {
-    float f = 1 / tan(((fovy) / 2.0f) * (PI / 180.0f));
+    float f = (1 / tan(fovy / 2.0f)) * toRadians;
 
     float x = f / aspect;
     float z = (zFar + zNear) / (zNear - zFar);

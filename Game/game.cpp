@@ -44,11 +44,14 @@ FMK::Camera camera{};
 
 extern "C" dllExport void GameInit()
 {
-    camera.CameraCreate({ 0, 0, 0 }, glm::radians(65.f), FMK::WIDTH / (float)FMK::HEIGHT, .8f, 4000.f);
+    float aspect= FMK::WIDTH / (float)FMK::HEIGHT;
+    //float aspect = 16 / 9;
+
+    camera.CameraCreate({ 0, 0, 0 }, glm::radians(65.f), 1, .8f, 4000.f);
     camera.mode = FMK::Camera::CameraMode::THIRD_PERSON;
     camera._pitch = -40;
     SetActiveCamera(&camera);
-     
+
     const int ENTITY_COUNT = 128;
     skybox_texture.CreateCubemapKTX("assets/skybox/skybox.ktx", VK_FORMAT_R8G8B8A8_UNORM);
     skybox_mesh.Create("assets/skybox/cube.gltf");
@@ -81,7 +84,7 @@ extern "C" dllExport void GameInit()
 
         if (i == 0) {
             entities[i].mesh = warrior;
-            entities[i].transform.translation = { -10, 0.f, -10};
+            entities[i].transform.translation = { -10, 0.f, -10 };
             entities[i].transform.rotation = glm::quat({ 0, 0, 0 });
             entities[i].transform.scale = glm::vec3(.01f);
             entities[i].object_idx = i;
@@ -119,13 +122,21 @@ extern "C" dllExport void GameInit()
 }
 
 
+float aspect = 1;
 extern "C" dllExport void GameUpdateAndRender(float dt, FMK::Input * input)
 {
-    int width=0, height=0;
+    int width = 0, height = 0;
     FMK::GetWindowSize(&width, &height);
     camera.CameraUpdate(input, dt, entities[0].transform.translation);
     camera._forward.y = 0;
-    camera._aspect = width / (float)height;
+    if (input->Q) {
+        aspect = (float)width / (float)height;
+    }
+    if (input->E) {
+        aspect = 16 / 9;
+    } 
+
+    camera._aspect = aspect;
     SetActiveCamera(&camera);
 
     glm::vec3 direction{ 0, 0, 0 };

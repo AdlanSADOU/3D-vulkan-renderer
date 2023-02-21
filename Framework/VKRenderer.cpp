@@ -58,7 +58,7 @@ namespace FMK {
 
     uint32_t        gFrame_in_flight_idx = 0;
     VkCommandBuffer gGraphics_cmd_buffer_in_flight;
-     
+
 
 
     void InitRenderer(int width, int height)
@@ -154,7 +154,7 @@ namespace FMK {
 
                 if (xrelPrev != xrel) _yaw += (float)xrel * _sensitivity;
                 if (yrelPrev != yrel && _pitch >= -89.f) _pitch -= (float)yrel * _sensitivity;
-                
+
                 if (_pitch < -75.f) _pitch = -75.f;
                 if (_pitch > -5.f) _pitch = -5.f;
             }
@@ -272,6 +272,7 @@ namespace FMK {
         void* values = (void*)((uint8_t*)sampler->output->buffer_view->buffer->data + sampler->output->buffer_view->offset);
         return ((glm::vec3*)values)[keyframe];
     }
+
     glm::quat getQuatAtKeyframe(cgltf_animation_sampler* sampler, int keyframe)
     {
         // todo: check for failure?
@@ -279,18 +280,14 @@ namespace FMK {
         return ((glm::quat*)values)[keyframe];
     }
 
-    /////////////////////////////////////
-
     void AnimationUpdate(Animation* anim, float dt)
     {
 
         /*if (!model->_should_play_animation) return;
-
         if (!model->_current_animation) {
             SDL_Log("CurrentAnimation not set");
             return;
         }
-
         auto anim = model->_current_animation;*/
 
         assert(anim->handle);
@@ -327,19 +324,30 @@ namespace FMK {
                 }
             }
 
+            float currentFrameTime = animTime - readFloatFromAccessor(sampler->input, currentKey);
+            float frameDuration = readFloatFromAccessor(sampler->input, nextKey) - readFloatFromAccessor(sampler->input, currentKey);
+            float t = currentFrameTime / frameDuration;
 
             Transform currentPoseTransform;
 
             if (channels[channel_idx].target_path == cgltf_animation_path_type_translation) {
-                currentPoseTransform.translation = getVec3AtKeyframe(channels[channel_idx].sampler, currentKey);
+                auto currentVec3 = getVec3AtKeyframe(channels[channel_idx].sampler, currentKey);
+                auto nextVec3 = getVec3AtKeyframe(channels[channel_idx].sampler, nextKey);
+                currentPoseTransform.translation = glm::mix(currentVec3, nextVec3, t);
+
                 ++channel_idx;
             }
             if (channels[channel_idx].target_path == cgltf_animation_path_type_rotation) {
-                currentPoseTransform.rotation = getQuatAtKeyframe(channels[channel_idx].sampler, currentKey);
+                auto currentQuat = getQuatAtKeyframe(channels[channel_idx].sampler, currentKey);
+                auto nextQuat = getQuatAtKeyframe(channels[channel_idx].sampler, nextKey);
+                currentPoseTransform.rotation = glm::slerp(currentQuat, nextQuat, t);
+
                 ++channel_idx;
             }
             if (channels[channel_idx].target_path == cgltf_animation_path_type_scale) {
-                currentPoseTransform.scale = getVec3AtKeyframe(channels[channel_idx].sampler, currentKey);
+                auto currentVec3 = getVec3AtKeyframe(channels[channel_idx].sampler, currentKey);
+                auto nextVec3 = getVec3AtKeyframe(channels[channel_idx].sampler, nextKey);
+                currentPoseTransform.scale = glm::mix(currentVec3, nextVec3, t);
                 ++channel_idx;
             }
 
@@ -357,8 +365,6 @@ namespace FMK {
             anim->joint_matrices[joint_idx] = anim->_joints[joint_idx].global_joint_matrix * anim->_joints[joint_idx].inv_bind_matrix;
         } // End of Joints loop
     }
-
-
 
 
 
