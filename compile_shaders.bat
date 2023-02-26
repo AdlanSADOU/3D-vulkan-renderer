@@ -1,4 +1,5 @@
 @echo off
+setlocal
 
 set VULKAN_SDK_Bin=C:\VulkanSDK\1.3.224.1\Bin
 
@@ -9,5 +10,5 @@ pushd shaders
 
 popd
 
-echo ----------------
-echo compiled shaders
+echo Done.
+pause
