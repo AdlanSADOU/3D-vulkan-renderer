@@ -26,7 +26,7 @@ VkSampleCountFlagBits sample_count = VK_SAMPLE_COUNT_8_BIT;
 // VK_PRESENT_MODE_FIFO_KHR; // widest support / VSYNC
 // VK_PRESENT_MODE_IMMEDIATE_KHR; // present as fast as possible, high tearing chance
 // VK_PRESENT_MODE_MAILBOX_KHR; // present as fast as possible, low tearing chance
-VkPresentModeKHR present_mode = VK_PRESENT_MODE_MAILBOX_KHR;
+VkPresentModeKHR present_mode = VK_PRESENT_MODE_FIFO_KHR;
 
 #define SECONDS(value)                  (1000000000 * value)
 #define ARR_COUNT(arr)                  (sizeof(arr) / sizeof(arr[0]))
