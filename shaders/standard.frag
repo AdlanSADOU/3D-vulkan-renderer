@@ -2,6 +2,7 @@
 #extension GL_EXT_debug_printf : enable
 #extension GL_ARB_separate_shader_objects : enable
 #extension GL_EXT_nonuniform_qualifier : enable
+#extension GL_OES_standard_derivatives : require
 
 layout (location = 0) in flat int vsBaseInstance;
 layout (location = 1) in flat int vsIsSkybox;
@@ -9,8 +10,8 @@ layout (location = 2) in vec3 vsNORMAL;
 layout (location = 3) in vec2 vsTexcoord_0;
 layout (location = 4) in vec3 vsSkyboxUVW;
 layout (location = 5) in vec3 vsViewDir;
-
 layout (location = 6) in vec3 vsViewSpaceVertPos;
+layout (location = 7) in mat3 vsTBN;
 
 
 layout (location = 0) out vec4 outFrag_Color;
@@ -31,16 +32,16 @@ struct MaterialData
     float roughness_factor;
     vec4 base_color_factor;
 };
+
 layout(set = 2, binding = 0)  buffer SSBO {
     MaterialData data[];
 } material;
 
-
-const vec3 lightColor = vec3(.6, .6, .6);
-const float lightPower = 15.0;
-const vec3 ambientColor = vec3(0.1, 0.0, 0.0); // ?
-const vec3 specColor = vec3(.1, .1, .1);
-const float shininess = 8.0;
+const vec3 lightColor = vec3(.3, .3, .3);
+const float lightPower = 17.0;
+const vec3 ambientColor = vec3(0.9, 0.9, 0.9); // ?
+const vec3 specColor = vec3(.04, .04, .04);
+const float shininess = 2.0;
 const float screenGamma = 1.0; // Assume the monitor is calibrated to the sRGB color space
 
 void main()
@@ -72,14 +73,16 @@ void main()
         baseColor = mat.base_color_factor;
     }
 
-    vec3 normalVec;
+    vec3 sampledTangentNormal;
     if (normalMapIdx > -1) {
-        normalVec = texture(sampler2D(textures[normalMapIdx], samp), tiledTexCoord).xyz;
+        sampledTangentNormal = texture(sampler2D(textures[normalMapIdx], samp), tiledTexCoord).xyz;
     } else {
-        normalVec = vec3(1);
+        sampledTangentNormal = vec3(1);
     }
 
-    vec3 lightDir = vec3(.10, 1.3, -1.8);
+    // vec3 lightDir = vec3(-.40, 1.5, -1.8);
+    vec3 lightDir = vec3(.5, 2.5, -.5);
+    lightDir=normalize(lightDir);
     // // float reflectance = normalize(dot(vsViewDir, vsNORMAL));
     // float reflectance = normalize(dot(vec3(.10, 1.3, -1.8), vsNORMAL));
 
@@ -98,7 +101,7 @@ void main()
     // finalColor = baseColor  * (lighting + lt);
 
     // outFrag_Color = finalColor;
-    vec3 normalInterp = normalVec * vsNORMAL;
+    vec3 normalInterp = sampledTangentNormal * vsNORMAL;
 
     vec3 normal = normalize(normalInterp);
     float distance = length(lightDir);
@@ -107,18 +110,18 @@ void main()
 
 
     float lambertian = max(dot(lightDir, normal), 0.0);
-    float specular = 0.0;
+    float specular = 0.1;
 
     if (lambertian > 0.5) {
-        vec3 viewDir = normalize(-vsViewSpaceVertPos);
+        vec3 viewDir = normalize(vsViewSpaceVertPos);
 
-        vec3 halfDir = normalize(lightDir + viewDir);
+        vec3 halfDir = normalize(lightDir );
         float specAngle = max(dot(halfDir, normal), 0.0);
         specular = pow(specAngle, shininess);
 
     }
 
-    vec3 colorLinear = vec3(baseColor).xyz +
+    vec3 colorLinear = ambientColor * vec3(baseColor).xyz +
                      vec3(baseColor).xyz * lambertian * lightColor * lightPower / distance +
                      specColor * specular * lightColor * lightPower / distance;
     // apply gamma correction (assume ambientColor, diffuseColor and specColor

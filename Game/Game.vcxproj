@@ -63,7 +63,7 @@
       <ConformanceMode>true</ConformanceMode>
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
-      <AdditionalIncludeDirectories>$(SolutionDir)Framework;$(SolutionDir)vendor\GLM;$(SolutionDir)vendor\SDL2\include;$(SolutionDir)vendor\stb;$(SolutionDir)src;C:\VulkanSDK\1.3.224.1\Include;C:\Program Files\KTX-Software\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SolutionDir)Framework;$(SolutionDir)vendor\GLM;$(SolutionDir)vendor\SDL2\include;$(SolutionDir)vendor\stb;$(SolutionDir)Game;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp20</LanguageStandard>
     </ClCompile>
     <Link>
@@ -84,7 +84,7 @@
       <ConformanceMode>true</ConformanceMode>
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
-      <AdditionalIncludeDirectories>$(SolutionDir)Framework;$(SolutionDir)vendor\GLM;$(SolutionDir)vendor\SDL2\include;$(SolutionDir)vendor\stb;$(SolutionDir)src;C:\VulkanSDK\1.3.224.1\Include;C:\Program Files\KTX-Software\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SolutionDir)Framework;$(SolutionDir)vendor\GLM;$(SolutionDir)vendor\SDL2\include;$(SolutionDir)vendor\stb;$(SolutionDir)Game;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp20</LanguageStandard>
     </ClCompile>
     <Link>

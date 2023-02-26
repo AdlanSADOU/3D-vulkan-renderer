@@ -1,3 +1,4 @@
+
 #include "VKDeviceContext.h"
 #include "VKDevice.h"
 
@@ -38,8 +39,6 @@ void VKDeviceContext::AddDescriptorImageInfo(VkDescriptorImageInfo desc_image_in
     {
         swapchain.Create(gDevice.surface, VK_NULL_HANDLE);
         frames.resize(swapchain._image_count);
-
-        SDL_Log("HELLOOOOOO VULKAN!");
     }
 
 

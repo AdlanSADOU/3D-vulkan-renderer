@@ -61,11 +61,22 @@ namespace FMK {
 
 
 
-    void InitRenderer(int width, int height)
+    bool InitRenderer(int width, int height)
     {
-        gDevice.Create(width, height);
-        gDeviceContext.Create();
+        if (!gDevice.Create(width, height)) {
+            SDL_Log("Failed to create device");
+            return false;
+        }
+
+        if (!gDeviceContext.Create())
+        {
+            SDL_Log("Failed to create device context");
+            return false;
+        }
+
         CreateGraphicsPipeline(gDevice.device, &gDeviceContext.default_graphics_pipeline);
+
+        return true;
     }
 
 
@@ -173,8 +184,8 @@ namespace FMK {
             xrelPrev = (float)xrel;
             yrelPrev = (float)yrel;
 
-            _position = target + offset;
-            _view = glm::lookAt(_position, target + glm::vec3(0, camera_height, 0), _up);
+            auto eye = target + offset;
+            _view = glm::lookAt(eye, target + _position, _up);
             //_view = glm::mat4(glm::mat3(_view));
         }
         break;
@@ -256,7 +267,7 @@ namespace FMK {
         return last_max;
     }
 
-    float readFloatFromAccessor(cgltf_accessor* accessor, cgltf_size idx)
+    float ReadFloatFromAccessor(cgltf_accessor* accessor, cgltf_size idx)
     {
         float value;
         // SDL_Log("idx:[%d]", idx);
@@ -266,14 +277,14 @@ namespace FMK {
             return 0;
     }
 
-    glm::vec3 getVec3AtKeyframe(cgltf_animation_sampler* sampler, int keyframe)
+    glm::vec3 GetVec3AtKeyframe(cgltf_animation_sampler* sampler, int keyframe)
     {
         // todo: check for failure?
         void* values = (void*)((uint8_t*)sampler->output->buffer_view->buffer->data + sampler->output->buffer_view->offset);
         return ((glm::vec3*)values)[keyframe];
     }
 
-    glm::quat getQuatAtKeyframe(cgltf_animation_sampler* sampler, int keyframe)
+    glm::quat GetQuatAtKeyframe(cgltf_animation_sampler* sampler, int keyframe)
     {
         // todo: check for failure?
         void* values = (void*)((uint8_t*)sampler->output->buffer_view->buffer->data + sampler->output->buffer_view->offset);
@@ -282,13 +293,13 @@ namespace FMK {
 
     void AnimationUpdate(Animation* anim, float dt)
     {
-
         /*if (!model->_should_play_animation) return;
         if (!model->_current_animation) {
             SDL_Log("CurrentAnimation not set");
             return;
         }
         auto anim = model->_current_animation;*/
+
 
         assert(anim->handle);
         assert(anim->duration > 0);
@@ -298,11 +309,12 @@ namespace FMK {
         float animTime = fmodf(anim->globalTimer, anim->duration);
 
 
-        static int iterationNb = 0;
+        //static int iterationNb = 0;
 
-        if (iterationNb++ == 0) {
-            SDL_Log("playing:[%s] | duration: %fsec", ((cgltf_animation*)anim->handle)->name, anim->duration);
-        }
+        //if (iterationNb++ == 0) {
+        //    SDL_Log("playing:[%s] | duration: %fsec", ((cgltf_animation*)anim->handle)->name, anim->duration);
+        //}
+
 
         // For each Joint
         int channel_idx = 0;
@@ -314,7 +326,7 @@ namespace FMK {
 
             auto* sampler = channels[channel_idx].sampler;
             for (int timestamp_idx = 0; timestamp_idx < sampler->input->count - 1; timestamp_idx++) {
-                float sampled_time = readFloatFromAccessor(sampler->input, static_cast<cgltf_size>(timestamp_idx) + 1);
+                float sampled_time = ReadFloatFromAccessor(sampler->input, static_cast<cgltf_size>(timestamp_idx) + 1);
                 //float sampled_time_prev;
 
                 if (sampled_time > animTime) {
@@ -324,30 +336,30 @@ namespace FMK {
                 }
             }
 
-            float currentFrameTime = animTime - readFloatFromAccessor(sampler->input, currentKey);
-            float frameDuration = readFloatFromAccessor(sampler->input, nextKey) - readFloatFromAccessor(sampler->input, currentKey);
+            float currentFrameTime = animTime - ReadFloatFromAccessor(sampler->input, currentKey);
+            float frameDuration = ReadFloatFromAccessor(sampler->input, nextKey) - ReadFloatFromAccessor(sampler->input, currentKey);
             float t = currentFrameTime / frameDuration;
 
             Transform currentPoseTransform;
 
             if (channels[channel_idx].target_path == cgltf_animation_path_type_translation) {
-                auto currentVec3 = getVec3AtKeyframe(channels[channel_idx].sampler, currentKey);
-                auto nextVec3 = getVec3AtKeyframe(channels[channel_idx].sampler, nextKey);
-                currentPoseTransform.translation = glm::mix(currentVec3, nextVec3, t);
+                auto currentVec3 = GetVec3AtKeyframe(channels[channel_idx].sampler, currentKey);
+                auto nextVec3 = GetVec3AtKeyframe(channels[channel_idx].sampler, nextKey);
+                currentPoseTransform.mTranslation = glm::mix(currentVec3, nextVec3, t);
 
                 ++channel_idx;
             }
             if (channels[channel_idx].target_path == cgltf_animation_path_type_rotation) {
-                auto currentQuat = getQuatAtKeyframe(channels[channel_idx].sampler, currentKey);
-                auto nextQuat = getQuatAtKeyframe(channels[channel_idx].sampler, nextKey);
-                currentPoseTransform.rotation = glm::slerp(currentQuat, nextQuat, t);
+                auto currentQuat = GetQuatAtKeyframe(channels[channel_idx].sampler, currentKey);
+                auto nextQuat = GetQuatAtKeyframe(channels[channel_idx].sampler, nextKey);
+                currentPoseTransform.mRotation = glm::slerp(currentQuat, nextQuat, t);
 
                 ++channel_idx;
             }
             if (channels[channel_idx].target_path == cgltf_animation_path_type_scale) {
-                auto currentVec3 = getVec3AtKeyframe(channels[channel_idx].sampler, currentKey);
-                auto nextVec3 = getVec3AtKeyframe(channels[channel_idx].sampler, nextKey);
-                currentPoseTransform.scale = glm::mix(currentVec3, nextVec3, t);
+                auto currentVec3 = GetVec3AtKeyframe(channels[channel_idx].sampler, currentKey);
+                auto nextVec3 = GetVec3AtKeyframe(channels[channel_idx].sampler, nextKey);
+                currentPoseTransform.mScale = currentVec3;
                 ++channel_idx;
             }
 
@@ -428,7 +440,10 @@ namespace FMK {
         }
         else {
             cgltf_data* data;
-            LoadCgltfData(mesh_filepath, &data);
+            if (!LoadCgltfData(mesh_filepath, &data)) {
+                return;
+            }
+
             SDL_Log("Loading : %s", mesh_filepath);
 
             gCgltfData.insert({ std::string(mesh_filepath), (void*)data });
@@ -702,7 +717,12 @@ namespace FMK {
 
 
 
-        // ////////// todo: figure out if we should actually go this route
+        // todo: figure out if we should actually go this route
+        // right now, we do not preprocess animation channels from gltf
+        // but use them as is. Maybe we should process gltf channels into our own
+        // format eventually. but for now, we're fine.
+        // Below is an incomplete attempt at doing so.
+        // 
         // ////// Process animation samples
         // auto anims_data = data->animations;
 
@@ -792,14 +812,6 @@ namespace FMK {
 
 
 
-
-
-
-
-
-
-
-
     //void DrawIndexed(const VkBuffer* vertex_buffers, uint32_t buffer_count, const VkDeviceSize* vertex_offsets, const VkBuffer index_buffer, uint32_t index_offset, uint32_t index_count, const MaterialData* material_data, uint32_t mesh_id)
     //{
     //	((MaterialData*)mapped_material_data_ptrs[gFrame_in_flight_idx])[mesh_id] = *material_data;
@@ -808,7 +820,6 @@ namespace FMK {
     //	vkCmdBindIndexBuffer(gGraphics_cmd_buffer_in_flight, index_buffer, index_offset, VK_INDEX_TYPE_UINT16);
     //	vkCmdDrawIndexed(gGraphics_cmd_buffer_in_flight, index_count, 1, 0, 0, mesh_id);
     //}
-
 
 
 
@@ -1437,7 +1448,6 @@ namespace FMK {
 
 void Swapchain::Create(VkSurfaceKHR surface, VkSwapchainKHR old_swapchain)
 {
-
     // fixme: double buffering may not be supported on some platforms
     // call to check vkGetPhysicalDeviceSurfaceCapabilitiesKHR()
 

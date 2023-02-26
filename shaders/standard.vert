@@ -16,8 +16,6 @@ layout(set = 0, binding = 0) uniform CameraBuffer {
     vec3 pos;
 } camera;
 
-
-
 struct ObjectData {
     mat4 model;
     mat4 joint_matrices[128];
@@ -27,13 +25,11 @@ layout(std430, set = 1, binding = 0) readonly buffer ObjectDataBuffer {
     ObjectData data[];
 } object;
 
-
 layout(std430, push_constant) uniform PushConstants {
     int object_data_idx;
     int has_joints;
     int is_skybox;
 } constants;
-
 
 //OUT
 layout (location = 0) out int vsBaseInstance;
@@ -42,8 +38,9 @@ layout (location = 2) out vec3 vsNORMAL;
 layout (location = 3) out vec2 vsTexcoord_0;
 layout (location = 4) out vec3 vsSkyboxUVW;
 layout (location = 5) out vec3 vsViewDir;
-
 layout (location = 6) out vec3 vsViewSpaceVertPos;
+layout (location = 7) out mat3 vsTBN;
+
 
 void main()
 {
@@ -75,17 +72,24 @@ void main()
     else
     {
         // vsNORMAL =  (transpose(inverse(mat3(model * skin_matrix))) * NORMAL);
-        vsNORMAL =  normalize(mat3(model * skin_matrix) * NORMAL);
-        vsTexcoord_0 = TEXCOORD_0;
         actual_view = camera.view;
+        vsNORMAL =  mat3((( model * skin_matrix))) * NORMAL;
+        vsTexcoord_0 = TEXCOORD_0;
     }
 
     vsBaseInstance = gl_BaseInstance;
     vsIsSkybox = constants.is_skybox;
-    vsViewDir = normalize(vec4(model * skin_matrix) * vec4(POSITION, 1) - vec4(camera.pos, 1)).xyz * -1;
+    // vsViewDir = normalize(vec4(model * skin_matrix) * vec4(POSITION, 1) - vec4(camera.pos, 1)).xyz * -1;
 
     vec4 vertPos4 = actual_view * model * skin_matrix * vec4(POSITION, 1);
-    vsViewSpaceVertPos = vertPos4.xyz / vertPos4.w; // why?
+    vsViewSpaceVertPos = vertPos4.xyz / vertPos4.w; // not sure if we need the perspective divide
+
+
+
+
+
+
+
 
     gl_Position = camera.projection * actual_view * model * skin_matrix * vec4(POSITION, 1);
 }

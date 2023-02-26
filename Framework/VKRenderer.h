@@ -3,7 +3,7 @@
 #include "common.h"
 
 #include <vulkan/vulkan.h>
-#include <vma/vk_mem_alloc.h>
+#include <vk_mem_alloc.h>
 #include <cgltf.h>
 #include <SDL.h>
 #include <vector>
@@ -73,20 +73,28 @@ namespace FMK {
 
     struct Transform
     {
-        const char* name = {};
-        Transform* parent = {};
-        Transform* child = {};
-        glm::vec3   scale = {};
-        glm::quat   rotation = {};
-        glm::vec3   translation = {};
+        const char* mName = {};
+        Transform* mParent = {};
+        Transform* mChild = {};
+        glm::vec3   mScale = {};
+        glm::quat   mRotation = {};
+        glm::vec3   mTranslation = {};
 
+        Transform() {};
+
+        Transform(glm::vec3 translation, glm::quat rotation, glm::vec3 scale)
+        {
+            mTranslation = translation;
+            mRotation = rotation;
+            mScale = scale;
+        };
 
         FMK_API glm::mat4 GetLocalMatrix()
         {
-            return glm::translate(glm::mat4(1), translation)
-                * glm::toMat4(rotation)
-                * glm::scale(glm::mat4(1), scale);
-        }
+            return glm::translate(glm::mat4(1), mTranslation)
+                * glm::toMat4(mRotation)
+                * glm::scale(glm::mat4(1), mScale);
+        };
     };
 
 
@@ -140,7 +148,6 @@ namespace FMK {
         bool        isPlaying{};
 
         std::vector<Joint> _joints;
-
         glm::mat4 joint_matrices[MAX_JOINTS];
     };
 
@@ -153,13 +160,12 @@ namespace FMK {
     struct Mesh
     {
         // todo: 
-        // tying skeletol info to Mesh is probably a bad idea
+        // tying skeletal info to Mesh is probably a bad idea
         // but we'll think about this when we actually get to the
         // part we need to share skeletons and animations
         std::vector<Joint> _joints;
-        // std::vector<AnimationV2> _animations_v2;
-        std::vector<Animation> _animations;
-        Animation* _current_animation = {};
+        std::vector<Animation> _animations{};
+        int32_t _current_animation_idx = {};
         bool _should_play_animation = true;
 
         ObjectData    object_data;
@@ -175,7 +181,7 @@ namespace FMK {
 
         // fixme: dont need to store this member. 
         // removing it would allow us to remove cgltf from the public interface
-        cgltf_data* _mesh_data = {}; 
+        cgltf_data* _mesh_data = {};
 
         struct SkinnedSubMesh
         {
@@ -204,7 +210,7 @@ namespace FMK {
     };
 
     void CreateGraphicsPipeline(VkDevice device, VkPipeline* pipeline);
-    FMK_API void InitRenderer(int width, int height);
+    FMK_API bool InitRenderer(int width, int height);
 
     FMK_API void RebuildGraphicsPipeline();
 
@@ -217,7 +223,7 @@ namespace FMK {
     FMK_API void AnimationUpdate(Animation* anim, float dt);
     FMK_API SDL_Window* GetSDLWindowHandle();
     FMK_API void SetWindowSize(int width, int height);
-    FMK_API void GetWindowSize(int *width, int *height);
+    FMK_API void GetWindowSize(int* width, int* height);
     FMK_API void SetActiveCamera(Camera* camera);
     FMK_API void SetObjectData(ObjectData* object_data, uint32_t object_idx);
     FMK_API void SetPushConstants(PushConstants* constants);

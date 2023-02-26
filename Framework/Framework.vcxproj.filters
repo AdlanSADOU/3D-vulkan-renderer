@@ -17,6 +17,7 @@
     <ClCompile Include="VKImage.cpp" />
     <ClCompile Include="VKBuffer.cpp" />
     <ClCompile Include="VKTexture.cpp" />
+    <ClCompile Include="Arena.cpp" />
   </ItemGroup>
   <ItemGroup>
     <None Include="cpp.hint" />

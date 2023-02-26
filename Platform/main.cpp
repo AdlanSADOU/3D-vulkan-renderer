@@ -1,11 +1,6 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
-#include <vector>
-#include <SDL.h>
 #include "VKRenderer.h"
-
-
-
 
 
 #define GAME_INIT(name) void name(void)
@@ -56,11 +51,8 @@ void LoadGameDll(GameDll* dll)
 }
 
 
-
-
-
-int width = 1180;
-int height = 720;
+int width = 1280;
+int height = 640;
 
 FMK::Input input;
 
@@ -73,9 +65,9 @@ extern int main(int argc, char** argv)
     game_dll.GameInit();
 
 
-
     bool bQuit = false;
-    bool window_minimized = false;
+    bool bWindow_minimized = false;
+    bool bFullscreen = false;
 
     uint64_t lastCycleCount = __rdtsc();
     uint64_t lastCounter = SDL_GetPerformanceCounter();
@@ -115,7 +107,17 @@ extern int main(int argc, char** argv)
                     if (key == SDLK_e) input.E = true;
                     if (key == SDLK_f)
                     {
-                        SDL_SetWindowFullscreen(FMK::GetSDLWindowHandle(), SDL_WINDOW_FULLSCREEN_DESKTOP);
+                        if (!bFullscreen)
+                        {
+                            SDL_SetWindowFullscreen(FMK::GetSDLWindowHandle(), SDL_WINDOW_FULLSCREEN_DESKTOP);
+                            bFullscreen = true;
+                        }
+                        else if (bFullscreen) {
+                            SDL_SetWindowFullscreen(FMK::GetSDLWindowHandle(), 0);
+                            bFullscreen = false;
+                        }
+                        
+
                     }
 
                     break;
@@ -150,10 +152,10 @@ extern int main(int argc, char** argv)
 
                         break;
                     case SDL_WINDOWEVENT_MINIMIZED:
-                        window_minimized = true;
+                        bWindow_minimized = true;
                         break;
                     case SDL_WINDOWEVENT_RESTORED:
-                        if (window_minimized) window_minimized = false;
+                        if (bWindow_minimized) bWindow_minimized = false;
                         break;
 
                         // SDL_QUIT happens first
@@ -167,8 +169,7 @@ extern int main(int argc, char** argv)
                 } // e.type
             } // e
         }
-        if (window_minimized) continue;
-
+        if (bWindow_minimized) continue;
 
 
         if (input.E) {
@@ -176,11 +177,7 @@ extern int main(int argc, char** argv)
         }
 
 
-
         game_dll.GameUpdateAndRender(dt, &input);
-
-
-
 
 
         uint64_t endCounter = SDL_GetPerformanceCounter();
@@ -194,7 +191,7 @@ extern int main(int argc, char** argv)
         lastCounter = endCounter;
         lastCycleCount = endCycleCount;
 
-#if 0
+#if 1
         static float acc = 0;
         if ((acc += dt) > 1) {
             static char buffer[256];
@@ -204,8 +201,8 @@ extern int main(int argc, char** argv)
                 MCyclesPerFrame,
                 MCyclesPerFrame / dt);
 
-            //SDL_SetWindowTitle(Renderer::GetSDLWindowHandle(), buffer);
-            SDL_Log("%s", buffer);
+            SDL_SetWindowTitle(FMK::GetSDLWindowHandle(), buffer);
+            //SDL_Log("%s", buffer);
             acc = 0;
         }
 #endif

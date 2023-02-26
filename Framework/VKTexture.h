@@ -25,5 +25,4 @@ namespace FMK {
         FMK_API void CreateCubemapKTX(const char* filepath, VkFormat format);
         FMK_API void Destroy();
     };
-
 }

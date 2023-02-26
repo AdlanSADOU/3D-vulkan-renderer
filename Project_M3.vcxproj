@@ -77,14 +77,14 @@
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <EnableModules>false</EnableModules>
-      <AdditionalIncludeDirectories>$(SolutionDir)Framework;$(SolutionDir)vendor\GLM;$(SolutionDir)vendor\SDL2\include;$(SolutionDir)vendor\stb;$(SolutionDir)src;C:\VulkanSDK\1.3.224.1\Include;C:\Program Files\KTX-Software\include;</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SolutionDir)Framework;$(SolutionDir)vendor\GLM;$(SolutionDir)vendor\SDL2\include;$(SolutionDir)vendor\stb;$(SolutionDir)src;$(SolutionDir)vendor\vulkan\include;$(SolutionDir)vendor\KTX\include</AdditionalIncludeDirectories>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <PrecompiledHeaderFile />
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalLibraryDirectories>$(SolutionDir)vendor\SDL2\lib;%(AdditionalLibraryDirectories);</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(SolutionDir)vendor\KTX\bin;$(SolutionDir)vendor\vulkan\bin;$(SolutionDir)vendor\SDL2\lib;%(AdditionalLibraryDirectories);</AdditionalLibraryDirectories>
       <AdditionalDependencies>shell32.lib;SDL2main.lib;SDL2.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <LinkTimeCodeGeneration>
       </LinkTimeCodeGeneration>
@@ -107,7 +107,7 @@ xcopy /y /d "$(SolutionDir)vendor\bin\*.dll" "$(OutDir)"</Command>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <EnableModules>true</EnableModules>
       <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
-      <AdditionalIncludeDirectories>$(SolutionDir)Framework;$(SolutionDir)vendor\GLM;$(SolutionDir)vendor\SDL2\include;$(SolutionDir)vendor\stb;$(SolutionDir)src;C:\VulkanSDK\1.3.224.1\Include;C:\Program Files\KTX-Software\include;</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SolutionDir)Framework;$(SolutionDir)vendor\GLM;$(SolutionDir)vendor\SDL2\include;$(SolutionDir)vendor\stb;$(SolutionDir)src;$(SolutionDir)vendor\vulkan\include;$(SolutionDir)vendor\KTX\include</AdditionalIncludeDirectories>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <PrecompiledHeaderFile />
     </ClCompile>
@@ -116,7 +116,7 @@ xcopy /y /d "$(SolutionDir)vendor\bin\*.dll" "$(OutDir)"</Command>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalLibraryDirectories>$(SolutionDir)vendor\SDL2\lib;</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(SolutionDir)vendor\KTX\bin;$(SolutionDir)vendor\vulkan\bin;$(SolutionDir)vendor\SDL2\lib;</AdditionalLibraryDirectories>
       <AdditionalDependencies>shell32.lib;SDL2main.lib;SDL2.lib;$(CoreLibraryDependencies);%(AdditionalDependencies)</AdditionalDependencies>
       <LinkTimeCodeGeneration>UseLinkTimeCodeGeneration</LinkTimeCodeGeneration>
       <LinkStatus>false</LinkStatus>

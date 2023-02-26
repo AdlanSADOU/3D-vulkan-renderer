@@ -5,7 +5,7 @@ struct SDL_Window;
 
 struct VKDevice
 {
-    SDL_Window* window;
+    SDL_Window*      window;
     VkDevice         device;
     VkInstance       instance;
     VkSurfaceKHR     surface;
@@ -28,5 +28,5 @@ struct VKDevice
     int width = 1180;
     int height = 720;
 
-    void Create(int width, int height);
+    bool Create(int width, int height);
 };
