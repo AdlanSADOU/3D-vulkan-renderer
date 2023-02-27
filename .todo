@@ -1,0 +1,31 @@
+- NEED EASY COMMAND BUFFERS
+- EASY BUFFER CREATION
+- EASY STAGING
+
+- imgui
+- editor
+- shadows
+- PBR
+- multisampling
+- tonemapping
+- anisotropy
+- font rendering /freetype
+- Frustum culling?
+- Occlusion culling?
+
+
+## Thoughts
+
+###Visual Studio rant
+
+- F2 search and replace straight out not working
+- F12 Goto definition = wrong location
+- jump to header file not working on almost every file, cant find it (not an include path issue)
+- shortcuts are a total mess
+- hot reload often takes longer than just recompiling and executing manually...
+Visual Studio 2015 worked much better in that regard
+
+## Editor
+
+must be launched from platform layer so that we can easily switch between game/editor
+game must reflect changes made from editor as they happen
