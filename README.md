@@ -1,7 +1,7 @@
 # 3D Renderer
 
 ## Preview
-![](https://github.com/AdlanSADOU/3D-Renderer/blob/main/.misc/preview.gif)
+![](https://github.com/AdlanSADOU/Game-Engine/blob/main/.preview/preview-v0.03.gif)
 
 Starting from August 2022, after obtaining my bachelor in IT I decided to take a year off to implement a 3D game from scratch(or almost). 
 The main goal is to get as much as possible hands on experience on some aspects and systems that are part of 3D game technologies.
@@ -9,8 +9,8 @@ The main goal is to get as much as possible hands on experience on some aspects 
 ## Current Features
 - [x] Rendering
 - [x] Skinned Animation
-- [x] Lighting
-- [x] Materials
+- [!] Lighting
+- [!] Materials
 - [ ] Font Rendering
 - [ ] Immediate GUI
 - [ ] Retained GUI
@@ -23,5 +23,5 @@ Currently using ~~OpenGL~~ Vulkan 1.3
 - SDL2 (not used for rendering)
 - cgltf.h
 - stb_image.h
-- GLEW
+- ImGUI
 - GLM
