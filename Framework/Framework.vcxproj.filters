@@ -9,6 +9,14 @@
     <ClInclude Include="VKImage.h" />
     <ClInclude Include="VKBuffer.h" />
     <ClInclude Include="VKTexture.h" />
+    <ClInclude Include="imconfig.h" />
+    <ClInclude Include="imgui.h" />
+    <ClInclude Include="imgui_internal.h" />
+    <ClInclude Include="imstb_rectpack.h" />
+    <ClInclude Include="imstb_textedit.h" />
+    <ClInclude Include="imstb_truetype.h" />
+    <ClInclude Include="imgui_impl_sdl2.h" />
+    <ClInclude Include="imgui_impl_vulkan.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="VKRenderer.cpp" />
@@ -18,6 +26,13 @@
     <ClCompile Include="VKBuffer.cpp" />
     <ClCompile Include="VKTexture.cpp" />
     <ClCompile Include="Arena.cpp" />
+    <ClCompile Include="imgui.cpp" />
+    <ClCompile Include="imgui_demo.cpp" />
+    <ClCompile Include="imgui_draw.cpp" />
+    <ClCompile Include="imgui_tables.cpp" />
+    <ClCompile Include="imgui_widgets.cpp" />
+    <ClCompile Include="imgui_impl_sdl2.cpp" />
+    <ClCompile Include="imgui_impl_vulkan.cpp" />
   </ItemGroup>
   <ItemGroup>
     <None Include="cpp.hint" />
