@@ -15,6 +15,8 @@
 #define FMK_API __declspec(dllimport)
 #endif
 
+#pragma warning(disable: 6011)
+#pragma warning(disable: 4530) // Exceptions related warning
 
 #define ARR_COUNT(arr) (sizeof(arr) / sizeof(arr[0]))
 

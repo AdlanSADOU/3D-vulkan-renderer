@@ -144,7 +144,7 @@ void VKDeviceContext::AddDescriptorImageInfo(VkDescriptorImageInfo desc_image_in
         //
 
         // set 0
-        // the layout for the set at binding 0 that will reference a MVP uniform blok
+        // the layout for the set at binding 0 that will reference an MVP uniform block
         VkDescriptorSetLayoutBinding view_projection_set_layout_binding{};
         view_projection_set_layout_binding.binding = 0;
         view_projection_set_layout_binding.descriptorCount = 1; // 1 instance of MVP block for this binding
@@ -264,7 +264,7 @@ void VKDeviceContext::AddDescriptorImageInfo(VkDescriptorImageInfo desc_image_in
                     VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE, allocator));
                 VKCHECK(vmaMapMemory(allocator, frames[i].draw_data_ssbo.vma_allocation, &mapped_object_data_ptrs[i]));
 
-                VKCHECK(CreateBuffer(&frames[i].material_data_ssbo, sizeof(MaterialData) * MAX_RENDER_ENTITIES,
+                VKCHECK(CreateBuffer(&frames[i].material_data_ssbo, sizeof(MaterialData) * MAX_RENDER_ENTITIES, // note: an entity could have 1 or more materials
                     VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
                     VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT,
                     VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE, allocator));
@@ -438,10 +438,6 @@ void VKDeviceContext::AddDescriptorImageInfo(VkDescriptorImageInfo desc_image_in
             vkUpdateDescriptorSets(gDevice.device, 1, &setWrites[1], 0, NULL);
         }
     }
-
-    //
-    // Pipelines
-    //
 
     return 1;
 }

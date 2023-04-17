@@ -30,7 +30,7 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
-    <PlatformToolset>v143</PlatformToolset>
+    <PlatformToolset>v142</PlatformToolset>
     <CharacterSet>Unicode</CharacterSet>
     <PreferredToolArchitecture>x64</PreferredToolArchitecture>
     <UseOfMfc>false</UseOfMfc>
@@ -38,7 +38,7 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
-    <PlatformToolset>v143</PlatformToolset>
+    <PlatformToolset>v142</PlatformToolset>
     <WholeProgramOptimization>true</WholeProgramOptimization>
     <CharacterSet>Unicode</CharacterSet>
     <PreferredToolArchitecture>x64</PreferredToolArchitecture>
@@ -62,6 +62,7 @@
     <IntDir>$(SolutionDir)bin\$(Configuration)\intermediate\</IntDir>
     <PublicIncludeDirectories>
     </PublicIncludeDirectories>
+    <EnableMicrosoftCodeAnalysis>false</EnableMicrosoftCodeAnalysis>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <OutDir>$(SolutionDir)bin\$(Configuration)\</OutDir>
@@ -80,6 +81,7 @@
       <AdditionalIncludeDirectories>$(SolutionDir)Framework;$(SolutionDir)vendor\GLM;$(SolutionDir)vendor\SDL2\include;$(SolutionDir)vendor\stb;$(SolutionDir)src;$(SolutionDir)vendor\vulkan\include;$(SolutionDir)vendor\KTX\include</AdditionalIncludeDirectories>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <PrecompiledHeaderFile />
+      <ExceptionHandling>false</ExceptionHandling>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -105,11 +107,12 @@ xcopy /y /d "$(SolutionDir)vendor\bin\*.dll" "$(OutDir)"</Command>
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
-      <EnableModules>true</EnableModules>
+      <EnableModules>false</EnableModules>
       <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
       <AdditionalIncludeDirectories>$(SolutionDir)Framework;$(SolutionDir)vendor\GLM;$(SolutionDir)vendor\SDL2\include;$(SolutionDir)vendor\stb;$(SolutionDir)src;$(SolutionDir)vendor\vulkan\include;$(SolutionDir)vendor\KTX\include</AdditionalIncludeDirectories>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <PrecompiledHeaderFile />
+      <ExceptionHandling>false</ExceptionHandling>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -125,6 +128,9 @@ xcopy /y /d "$(SolutionDir)vendor\bin\*.dll" "$(OutDir)"</Command>
       <Command>xcopy /y /d "$(SolutionDir)Game\$(Configuration)\Game.dll" "$(OutDir)"
 xcopy /y /d "$(SolutionDir)vendor\bin\*.dll" "$(OutDir)"</Command>
     </PostBuildEvent>
+    <Manifest>
+      <VerboseOutput>true</VerboseOutput>
+    </Manifest>
   </ItemDefinitionGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

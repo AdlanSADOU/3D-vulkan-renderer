@@ -42,8 +42,6 @@ struct VKDeviceContext
     Swapchain swapchain;
     std::vector<FrameData> frames;
 
-
-
     VkDescriptorPool descriptor_pool;
 
 

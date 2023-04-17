@@ -191,7 +191,6 @@ bool VKDevice::Create(int width, int height)
         } while (selection < 0 || selection > available_gpus.size() - 1);
 
         selected_physical_device_idx = available_gpus[selection].index;
-
 #else
         for (size_t i = 0; i < available_gpus.size(); i++) {
             if (available_gpus[i].type == VkPhysicalDeviceType::VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU) {
@@ -206,8 +205,8 @@ bool VKDevice::Create(int width, int height)
                     selected_physical_device_idx = available_gpus[i].index;
             }
         }
-
 #endif
+
         physical_device = physical_devices[selected_physical_device_idx];
         SDL_Log("Selected GPU:[%s][%s]", available_gpus[selected_physical_device_idx].type_name, available_gpus[selected_physical_device_idx].name);
 

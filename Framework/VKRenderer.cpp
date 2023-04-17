@@ -22,6 +22,10 @@
 
 
 #pragma warning(disable: 6011)
+#pragma warning(disable: 4530)
+
+#define SECONDS(value)                  (1000000000 * value)
+#define ARR_COUNT(arr)                  (sizeof(arr) / sizeof(arr[0]))
 
 // node(ad) this is used for bindless ObjectData & MaterialDataSSBO shader resources
 // which can be indexed for every rendered mesh
@@ -32,10 +36,6 @@ VkSampleCountFlagBits sample_count = VK_SAMPLE_COUNT_8_BIT;
 // VK_PRESENT_MODE_IMMEDIATE_KHR; // present as fast as possible, high tearing chance
 // VK_PRESENT_MODE_MAILBOX_KHR; // present as fast as possible, low tearing chance
 VkPresentModeKHR present_mode = VK_PRESENT_MODE_FIFO_KHR;
-
-#define SECONDS(value)                  (1000000000 * value)
-#define ARR_COUNT(arr)                  (sizeof(arr) / sizeof(arr[0]))
-
 
 VKDevice gDevice;
 VKDeviceContext gDeviceContext;
@@ -310,7 +310,7 @@ namespace FMK {
         assert(anim->duration > 0);
         anim->isPlaying = true;
 
-        anim->globalTimer += dt;
+        anim->globalTimer += dt * 0.5f;
         float animTime = fmodf(anim->globalTimer, anim->duration);
 
 
@@ -324,25 +324,29 @@ namespace FMK {
         // For each Joint
         int channel_idx = 0;
         for (size_t joint_idx = 0; joint_idx < anim->_joints.size(); joint_idx++) {
+            // note: for this loop we are working on data the CPU has to fetch from [channels].
+            // how cache efficient is it? How big is that data? Can it fit in a hypothetical 32k L1 cache?
 
             auto channels = ((cgltf_animation*)anim->handle)->channels;
             int  currentKey = -1;
             int  nextKey = -1;
 
             auto* sampler = channels[channel_idx].sampler;
-            for (int timestamp_idx = 0; timestamp_idx < sampler->input->count - 1; timestamp_idx++) {
+
+            int timestamp_idx = 0;
+            for (; timestamp_idx < sampler->input->count; timestamp_idx++) {
                 float sampled_time = ReadFloatFromAccessor(sampler->input, static_cast<cgltf_size>(timestamp_idx) + 1);
                 //float sampled_time_prev;
 
-                if (sampled_time > animTime) {
+                if (sampled_time >= animTime) {
                     currentKey = timestamp_idx;
                     nextKey = currentKey + 1;
                     break;
                 }
             }
 
-            float currentFrameTime = animTime - ReadFloatFromAccessor(sampler->input, currentKey);
-            float frameDuration = ReadFloatFromAccessor(sampler->input, nextKey) - ReadFloatFromAccessor(sampler->input, currentKey);
+            float currentFrameTime = animTime - ReadFloatFromAccessor(sampler->input, timestamp_idx);
+            float frameDuration = ReadFloatFromAccessor(sampler->input, nextKey) - ReadFloatFromAccessor(sampler->input, timestamp_idx);
             float t = currentFrameTime / frameDuration;
 
             Transform currentPoseTransform;
@@ -384,7 +388,8 @@ namespace FMK {
     }
 
 
-
+    // Animations need to be ready when a draw call is about to be maid
+    // anim->joint_matrices[] is what matters
 
 
 
