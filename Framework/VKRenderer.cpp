@@ -310,7 +310,7 @@ namespace FMK {
         assert(anim->duration > 0);
         anim->isPlaying = true;
 
-        anim->globalTimer += dt * 0.5f;
+        anim->globalTimer += dt * 1.0f;
         float animTime = fmodf(anim->globalTimer, anim->duration);
 
 

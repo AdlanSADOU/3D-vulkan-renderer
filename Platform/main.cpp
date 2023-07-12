@@ -206,7 +206,6 @@ extern int main(int argc, char** argv)
             acc = 0;
         }
 #endif
-
     }
 
     /*vkDestroySurfaceKHR(gInstance, gSurface, NULL);

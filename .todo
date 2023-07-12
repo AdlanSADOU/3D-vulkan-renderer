@@ -1,6 +1,10 @@
+Client API
 - NEED EASY COMMAND BUFFERS
+
+Renderer API
 - EASY BUFFER CREATION
 - EASY STAGING
+
 
 - imgui
 - editor

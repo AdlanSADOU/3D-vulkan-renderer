@@ -1,6 +1,5 @@
 #include "VKRenderer.h"
 #define WIN32_LEAN_AND_MEAN             // Exclude rarely-used stuff from Windows headers
-// Windows Header Files
 #include <windows.h>
 
 
@@ -39,7 +38,7 @@ struct Entity
 std::vector<Entity> entities{};
 
 Entity skybox;
-Entity* player;
+Entity *player;
 
 FMK::Texture skybox_texture;
 FMK::Mesh skybox_mesh;
@@ -79,7 +78,7 @@ extern "C" dllExport void GameInit()
 
 
     //note: temporary lambda, I have not decided yet how I want entities to work.
-    auto createEntity = [](FMK::Mesh mesh, FMK::Transform transform, int32_t* objectIndex) -> Entity {
+    auto createEntity = [](FMK::Mesh mesh, FMK::Transform transform, int32_t *objectIndex) -> Entity {
         Entity e{};
 
         e.mesh = mesh;
@@ -88,7 +87,7 @@ extern "C" dllExport void GameInit()
         if (mesh._animations.size() > 0)
         {
             e.mesh._should_play_animation = true;
-            e.mesh._current_animation_idx = 0; 
+            e.mesh._current_animation_idx = 0;
         }
         else {
             e.mesh._should_play_animation = false;
@@ -131,7 +130,7 @@ extern "C" dllExport void GameInit()
     }
 
     // Paladins
-    for (int i = 0; i < ENTITY_COUNT-64; i++) {
+    for (int i = 0; i < ENTITY_COUNT - 64; i++) {
         static float z = 0;
         static float x = 0;
 
@@ -189,7 +188,7 @@ extern "C" dllExport void GameUpdateAndRender(float dt, FMK::Input * input)
         if (glm::length(inputDirection) > 1.f)
             inputDirection = glm::normalize(inputDirection);
 
-        if (entities[0].mesh._current_animation_idx!= 1)
+        if (entities[0].mesh._current_animation_idx != 1)
             entities[0].mesh._current_animation_idx = 1;
 
         entities[0].transform.mRotation = glm::quatLookAt(inputDirection, camera._up);
